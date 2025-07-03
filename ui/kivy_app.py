@@ -3,6 +3,7 @@
 Kivy-based desktop application UI. Allows file selection, parameter settings,
 starts processing and displays progress and results list.
 Remembers last opened folder between sessions using SQLite.
+Initializes cache database with proven schema if it does not exist.
 """
 import os
 import sqlite3
@@ -15,9 +16,11 @@ from kivy.uix.label import Label
 from kivy.uix.progressbar import ProgressBar
 from core.pipeline import process_file
 
-# SQLite settings database
+# SQLite databases
 SETTINGS_DB = os.path.join(os.getcwd(), 'settings.db')
+CACHE_DB = os.path.join(os.getcwd(), 'cache.db')
 
+# Initialize or migrate settings database
 def init_settings_db():
     conn = sqlite3.connect(SETTINGS_DB)
     cur = conn.cursor()
@@ -30,6 +33,41 @@ def init_settings_db():
     conn.commit()
     conn.close()
 
+# Initialize or migrate cache database using proven structure
+def init_cache_db():
+    conn = sqlite3.connect(CACHE_DB)
+    # Enable foreign key support
+    conn.execute('PRAGMA foreign_keys = ON')
+    cur = conn.cursor()
+    # file_cache stores processed semantic units
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS file_cache (
+            data_hash TEXT PRIMARY KEY,
+            semantic_units TEXT NOT NULL
+        )
+    ''')
+    # key_terms_cache stores extracted key terms
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS key_terms_cache (
+            data_hash TEXT PRIMARY KEY,
+            terms_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(data_hash) REFERENCES file_cache(data_hash) ON DELETE CASCADE
+        )
+    ''')
+    # translation_cache stores translation results
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS translation_cache (
+            full_hash TEXT PRIMARY KEY,
+            data_hash TEXT NOT NULL,
+            bilingual_objects TEXT NOT NULL,
+            FOREIGN KEY(data_hash) REFERENCES file_cache(data_hash) ON DELETE CASCADE
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+# Helpers for settings
 def get_setting(key, default=None):
     conn = sqlite3.connect(SETTINGS_DB)
     cur = conn.cursor()
@@ -48,7 +86,9 @@ def set_setting(key, value):
 class MainLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation='vertical', **kwargs)
+        # Ensure databases exist and have correct schema
         init_settings_db()
+        init_cache_db()
 
         # Load last directory if exists
         last_dir = get_setting('last_dir', os.getcwd())
@@ -104,7 +144,7 @@ class MainLayout(BoxLayout):
             translator=self.translator_spinner.text,
             voice=self.voice_spinner.text,
             subtitle_mode=int(self.subtitle_spinner.text),
-            cache_db=os.path.join(os.getcwd(), 'cache.db')
+            cache_db=CACHE_DB
         )
         self.result_label.text = 'Done! Check output files.'
 
