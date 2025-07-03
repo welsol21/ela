@@ -45,3 +45,6 @@ cache.db
 
 # Environment variables
 .env
+
+
+diff_git.txt

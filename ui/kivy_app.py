@@ -1,4 +1,3 @@
-# ========== ui/kivy_app.py ==========
 """
 Kivy-based desktop application UI. Allows file selection, parameter settings,
 starts processing and displays progress and results list.
@@ -14,13 +13,15 @@ from kivy.uix.button import Button
 from kivy.uix.spinner import Spinner
 from kivy.uix.label import Label
 from kivy.uix.progressbar import ProgressBar
-from ui.wraplayout import WrapLayout
-from kivy.uix.widget import Widget
+from kivy.uix.popup import Popup
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.modalview import ModalView
 
 from core.pipeline import process_file
 from core.db_utils import (
-    init_settings_db, init_cache_db, get_setting, set_setting, CACHE_DB
+    init_settings_db, init_cache_db, get_setting, set_setting
 )
+
 
 class MainLayout(BoxLayout):
     def __init__(self, **kwargs):
@@ -28,36 +29,28 @@ class MainLayout(BoxLayout):
         init_settings_db()
         init_cache_db()
 
-        last_dir = get_setting('last_dir', os.getcwd())
-        if not os.path.isdir(last_dir):
-            last_dir = os.getcwd()
+        self.selected_file = None
 
-        self.filechooser = FileChooserIconView(
-            filters=['*.mp3', '*.wav', '*.txt', '*.pdf'],
-            path=last_dir
-        )
-        self.add_widget(self.filechooser)
+        # === Кнопка выбора файла ===
+        file_button = Button(text="Upload file", size_hint_y=None, height=50)
+        file_button.bind(on_release=self.open_file_chooser)
+        self.add_widget(file_button)
 
-        self.settings = WrapLayout(size_hint_y=None, height=120, padding=10, spacing=15)
+        self.file_label = Label(text="No file selected", size_hint_y=None, height=30)
+        self.add_widget(self.file_label)
 
-        def create_setting_block(title, widget):
-            box = BoxLayout(orientation='vertical', size_hint=(None, None), size=(220, 80))
-            label = Label(text=title, size_hint_y=None, height=25)
-            box.add_widget(label)
-            box.add_widget(widget)
-            return box
+        # === Панель настроек ===
+        self.settings = GridLayout(cols=2, spacing=10, padding=10, size_hint_y=None, height=200)
 
         self.translator_spinner = Spinner(
             text='GPT',
             values=['GPT', 'DeepL', 'LaraAPI', 'HuggingFace', 'Original'],
-            size_hint_y=None,
-            height=40
+            size_hint_y=None, height=40
         )
         self.voice_spinner = Spinner(
             text='Male',
             values=['Male', 'Female'],
-            size_hint_y=None,
-            height=40
+            size_hint_y=None, height=40
         )
         self.subtitle_spinner = Spinner(
             text='Bilingual (eng+ru) sequential',
@@ -68,40 +61,63 @@ class MainLayout(BoxLayout):
                 'English audio + Russian subtitles',
                 'Bilingual audio + Russian subtitles'
             ],
-            size_hint_y=None,
-            height=40
+            size_hint_y=None, height=40
         )
         self.start_btn = Button(
             text='Start',
-            size_hint=(None, None),
-            size=(150, 65)
+            size_hint_y=None, height=50
         )
         self.start_btn.bind(on_release=self.on_start)
 
-        self.settings.add_widget(create_setting_block("Translator", self.translator_spinner))
-        self.settings.add_widget(create_setting_block("Voice", self.voice_spinner))
-        self.settings.add_widget(create_setting_block("Subtitles", self.subtitle_spinner))
-        self.settings.add_widget(create_setting_block("", self.start_btn))
+        self.settings.add_widget(Label(text="Translator:"))
+        self.settings.add_widget(self.translator_spinner)
+        self.settings.add_widget(Label(text="Voice:"))
+        self.settings.add_widget(self.voice_spinner)
+        self.settings.add_widget(Label(text="Subtitles:"))
+        self.settings.add_widget(self.subtitle_spinner)
+        self.settings.add_widget(Label(text=""))
+        self.settings.add_widget(self.start_btn)
 
         self.add_widget(self.settings)
 
+        # === Прогресс и результат ===
         self.progress = ProgressBar(max=100)
         self.add_widget(self.progress)
 
         self.result_label = Label(text='Ready')
         self.add_widget(self.result_label)
 
+    def open_file_chooser(self, instance):
+        last_dir = get_setting('last_dir', os.getcwd())
+        if not os.path.isdir(last_dir):
+            last_dir = os.getcwd()
+
+        filechooser = FileChooserIconView(
+            filters=['*.mp3', '*.wav', '*.txt', '*.pdf'],
+            path=last_dir
+        )
+
+        popup = ModalView(size_hint=(0.9, 0.9))
+        popup.add_widget(filechooser)
+
+        def on_selection(_, selection, __):  # три аргумента!
+            if selection:
+                self.selected_file = selection[0]
+                self.file_label.text = os.path.basename(self.selected_file)
+                set_setting('last_dir', os.path.dirname(self.selected_file))
+                popup.dismiss()
+
+        filechooser.bind(on_submit=on_selection)
+        popup.open()
+
     def on_start(self, instance):
-        input_path = self.filechooser.selection and self.filechooser.selection[0]
-        if not input_path:
+        if not self.selected_file:
             self.result_label.text = 'Please select a file'
             return
 
-        set_setting('last_dir', os.path.dirname(input_path))
         self.result_label.text = 'Processing...'
 
         subtitle_mode = self.subtitle_spinner.values.index(self.subtitle_spinner.text)
-
         translator_map = {
             'GPT': 'g',
             'DeepL': 'd',
@@ -112,9 +128,9 @@ class MainLayout(BoxLayout):
         translator_code = translator_map.get(self.translator_spinner.text, 'h')
 
         process_file(
-            audio_path=input_path,
-            output_dir=os.path.dirname(input_path),
-            translator_choice=translator_code,
+            audio_path=self.selected_file,
+            output_dir=os.path.dirname(self.selected_file),
+            translator_code=translator_code,
             voice_choice=self.voice_spinner.text.lower(),
             subtitle_mode=subtitle_mode
         )
