@@ -2,8 +2,10 @@
 """
 Kivy-based desktop application UI. Allows file selection, parameter settings,
 starts processing and displays progress and results list.
+Remembers last opened folder between sessions using SQLite.
 """
 import os
+import sqlite3
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.filechooser import FileChooserIconView
@@ -11,14 +13,53 @@ from kivy.uix.button import Button
 from kivy.uix.spinner import Spinner
 from kivy.uix.label import Label
 from kivy.uix.progressbar import ProgressBar
-
 from core.pipeline import process_file
+
+# SQLite settings database
+SETTINGS_DB = os.path.join(os.getcwd(), 'settings.db')
+
+def init_settings_db():
+    conn = sqlite3.connect(SETTINGS_DB)
+    cur = conn.cursor()
+    cur.execute('''
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def get_setting(key, default=None):
+    conn = sqlite3.connect(SETTINGS_DB)
+    cur = conn.cursor()
+    cur.execute('SELECT value FROM settings WHERE key = ?', (key,))
+    row = cur.fetchone()
+    conn.close()
+    return row[0] if row else default
+
+def set_setting(key, value):
+    conn = sqlite3.connect(SETTINGS_DB)
+    cur = conn.cursor()
+    cur.execute('REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value))
+    conn.commit()
+    conn.close()
 
 class MainLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(orientation='vertical', **kwargs)
+        init_settings_db()
+
+        # Load last directory if exists
+        last_dir = get_setting('last_dir', os.getcwd())
+        if not os.path.isdir(last_dir):
+            last_dir = os.getcwd()
+
         # File chooser
-        self.filechooser = FileChooserIconView(filters=['*.mp3', '*.wav', '*.txt', '*.pdf'])
+        self.filechooser = FileChooserIconView(
+            filters=['*.mp3', '*.wav', '*.txt', '*.pdf'],
+            path=last_dir
+        )
         self.add_widget(self.filechooser)
 
         # Settings panel
@@ -50,6 +91,11 @@ class MainLayout(BoxLayout):
         if not input_path:
             self.result_label.text = 'Please select a file'
             return
+
+        # Save last directory in settings
+        last_folder = os.path.dirname(input_path)
+        set_setting('last_dir', last_folder)
+
         self.result_label.text = 'Processing...'
         # TODO: run processing in thread and update progress
         process_file(
