@@ -2,7 +2,7 @@
 """
 Entry point for the application.
 """
-import ui.kivy_app as kivy_app
+from ui.kivy_app import MVPApp
 
 if __name__ == '__main__':
-    kivy_app.MVPApp().run()
+    MVPApp().run()

@@ -3,6 +3,11 @@
 Wrapper to run main pipeline logic from ttw.py with arguments provided by UI or CLI.
 """
 
+# ========== core/pipeline.py ==========
+"""
+Wrapper to run main pipeline logic from ttw.py with arguments provided by UI or CLI.
+"""
+
 import tempfile
 import os
 from core.ttw import run_pipeline_main
