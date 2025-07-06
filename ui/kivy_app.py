@@ -1,11 +1,4 @@
 # ========== ui/kivy_app.py ==========
-"""
-Kivy-based desktop application UI. Allows file selection, parameter settings,
-starts processing and displays progress and results list.
-Remembers last opened folder between sessions using SQLite.
-Initializes cache database with proven schema if it does not exist.
-"""
-# ========== ui/kivy_app.py ==========
 import os
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
@@ -23,7 +16,7 @@ from kivy.graphics import Color, Line
 
 from core.pipeline import process_file
 from core.db_utils import init_settings_db, init_cache_db, get_setting, set_setting
-
+from ui.workspace import WorkspaceWidget  # добавлено
 
 class MainLayout(BoxLayout):
     def __init__(self, **kwargs):
@@ -31,6 +24,8 @@ class MainLayout(BoxLayout):
         init_settings_db()
         init_cache_db()
         self.selected_file = None
+
+        self.workspace = WorkspaceWidget(size_hint_y=None, height=260)  # добавлено
 
         scroll = ScrollView(size_hint=(1, 1))
         content = BoxLayout(orientation="vertical", size_hint_y=None, padding=10, spacing=10)
@@ -40,15 +35,13 @@ class MainLayout(BoxLayout):
         menu = BoxLayout(orientation="horizontal", size_hint_y=None, height=50, spacing=10, padding=5)
         for name in ["Media", "Analyze", "Vocabulary"]:
             btn = Button(text=name, size_hint_y=None, height=50)
-
             def change_screen(instance, screen_name=name):
                 self.manager.current = screen_name
-
             btn.bind(on_release=change_screen)
             menu.add_widget(btn)
         content.add_widget(menu)
 
-        # Upload file
+        # Upload
         upload_btn = Button(text="Upload file", size_hint_y=None, height=50)
         upload_btn.bind(on_release=self.open_file_chooser)
         content.add_widget(upload_btn)
@@ -111,17 +104,15 @@ class MainLayout(BoxLayout):
         settings_border.add_widget(settings_box)
         content.add_widget(settings_border)
 
+        # Workspace block (добавлен)
+        content.add_widget(self.workspace)
+
         # Progress bar
         self.progress = ProgressBar(max=100, size_hint_y=None, height=20)
         content.add_widget(self.progress)
 
-        # Enlarged result block
-        result_container = AnchorLayout(
-            anchor_x='center',
-            anchor_y='center',
-            size_hint_y=None,
-            height=140
-        )
+        # Result block
+        result_container = AnchorLayout(anchor_x='center', anchor_y='center', size_hint_y=None, height=140)
         self.result_label = Label(text='Ready')
         result_container.add_widget(self.result_label)
         content.add_widget(result_container)
@@ -159,6 +150,10 @@ class MainLayout(BoxLayout):
             return
         self.result_label.text = "Processing..."
 
+        # Сброс прогресса
+        for bar in self.workspace.step_widgets.values():
+            bar.value = 0
+
         subtitle_mode = self.subtitle_spinner.values.index(self.subtitle_spinner.text)
         translator_map = {
             'GPT': 'g',
@@ -169,15 +164,21 @@ class MainLayout(BoxLayout):
         }
         translator_code = translator_map.get(self.translator_spinner.text, 'h')
 
+        def ui_callback(step_index, progress):
+            steps = list(self.workspace.step_widgets.keys())
+            if 0 <= step_index < len(steps):
+                step = steps[step_index]
+                self.workspace.update_step_progress(step, progress)
+
         process_file(
             audio_path=self.selected_file,
             output_dir=os.path.dirname(self.selected_file),
             translator_code=translator_code,
             voice_choice=self.voice_spinner.text.lower(),
-            subtitle_mode=subtitle_mode
+            subtitle_mode=subtitle_mode,
+            ui_callback=ui_callback  # Новый параметр
         )
         self.result_label.text = "Done! Check output."
-
 
 class MVPApp(App):
     def build(self):

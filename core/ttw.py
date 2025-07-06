@@ -28,8 +28,16 @@ from openai import OpenAI, OpenAIError
 from lara_sdk import Credentials, Translator as LaraTranslator, LaraApiError
 import sqlite3
 
-def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode, tmpdir, db_config, output_dir):
+def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode,
+                      tmpdir, db_config, output_dir, ui_callback=None):
     start_time = time.time()
+    if ui_callback:
+        ui_callback(1, 0)
+        ui_callback(2, 0)
+        ui_callback(3, 0)
+        ui_callback(4, 0)
+        ui_callback(5, 0)
+
     _suffix_map = {
         "gpt": "gpt",
         "deepl": "deepl",
@@ -80,6 +88,8 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
     if units is not None:
         skip_transcribe = True
         print("Transcript found in file_cache, skipping transcription.")
+        if ui_callback:
+            ui_callback(1, 100)
     else:
         skip_transcribe = False
 
@@ -165,6 +175,9 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
     if skip_translate:
         sentences = bilingual_objects
         print("Translation found in translation_cache, skipping translation.")
+        if ui_callback:
+            ui_callback(2, 100)
+            ui_callback(3, 100)
     gpt_client = None
     deepl_translator = None
     lara_translator = None
@@ -196,8 +209,15 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
 
     def try_generate_tts(text: str, voice: str, path: str, retries: int = 3) -> bool:
         for i in range(1, retries + 1):
-            if asyncio.run(_tts_save(text, voice, path)):
-                return True
+            try:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                result = loop.run_until_complete(_tts_save(text, voice, path))
+                loop.close()
+                if result:
+                    return True
+            except Exception as e:
+                print(f"TTS retry {i} failed: {e}")
             time.sleep(1)
         return False
 
@@ -221,8 +241,10 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
         else:
             raise RuntimeError("Unsupported translation mode.")
 
-    def enrich_with_translation(sentences: list, tmpdir: str):
-        for s in tqdm(sentences, desc="Translating & synthesizing"):
+    def enrich_with_translation(sentences: list, tmpdir: str, ui_callback=None):
+        if ui_callback:
+            ui_callback(2, 0)       
+        for i, s in enumerate(tqdm(sentences, desc="Translating & synthesizing"), 1):
             if subtitle_mode == "0":
                 s["text_ru"] = ""
                 s["audio_ru_path"] = None
@@ -267,17 +289,24 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
                 })
                 off += avg
             s["units_ru"] = ru_units
+            if ui_callback:
+                ui_callback(2, int(i / len(sentences) * 100))
+        
+        if ui_callback:
+            ui_callback(2, 100)
+            ui_callback(3, 100)
 
     if not skip_translate:
-        enrich_with_translation(sentences, tmpdir)
+        enrich_with_translation(sentences, tmpdir, ui_callback)
         bo_json = json.dumps(sentences, ensure_ascii=False)
         insert_bilingual_objects(cur, full_hash, data_hash, bo_json)
         conn.commit()
         print("✅ Translation and TTS saved to translation_cache.")
     else:
-        enrich_with_translation(sentences, tmpdir)
+        enrich_with_translation(sentences, tmpdir, ui_callback)
     
-    def generate_outputs(sentences: list, audio_path: str, tmpdir: str, suffix: str, output_dir: str) -> None:
+    def generate_outputs(sentences: list, audio_path: str, tmpdir: str, suffix: str,
+                     output_dir: str, subtitle_mode: str, ui_callback=None) -> None:
         full = AudioSegment.from_file(audio_path)
         out = AudioSegment.empty()
 
@@ -298,6 +327,9 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
             json.dump(sentences, f, ensure_ascii=False, indent=2)
         with open(f"{base_path}_bilingual_objects_{suffix}.json", "w", encoding="utf-8") as f:
             json.dump(sentences, f, ensure_ascii=False, indent=2)
+
+        if ui_callback:
+            ui_callback(4, 0)
 
         for idx, s in enumerate(tqdm(sentences, desc="Building A/V"), start=1):
             st, et = int(s["start"] * 1000), int(s["end"] * 1000)
@@ -381,6 +413,9 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
             if idx < len(sentences):
                 gap = int((sentences[idx]["start"] - s["end"]) * 1000)
                 out += AudioSegment.silent(duration=max(gap // 3, 10))
+            
+            if ui_callback:
+                ui_callback(5, int(idx / len(sentences) * 100))
 
         mp3_out = f"{base_path}_bilingual_{suffix}.mp3"
         srt_out = f"{base_path}_bilingual_{suffix}.srt"
@@ -417,7 +452,14 @@ def run_pipeline_main(audio_path, translator_choice, voice_choice, subtitle_mode
         print(" •", srt_out)
         print(" •", txt_out)
 
-    generate_outputs(sentences, audio_path, tmpdir, suffix, output_dir)
+        if ui_callback:
+            ui_callback(4, 100)
+            ui_callback(5, 100)
+
+    if ui_callback:
+        ui_callback(5, 0)
+
+    generate_outputs(sentences, audio_path, tmpdir, suffix, output_dir, subtitle_mode, ui_callback)
 
     shutil.rmtree(tmpdir)
     cur.close()
