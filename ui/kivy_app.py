@@ -1,6 +1,8 @@
 # ========== ui/kivy_app.py ==========
 import os
+import threading
 from kivy.app import App
+from kivy.clock import Clock
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.spinner import Spinner
@@ -16,7 +18,7 @@ from kivy.graphics import Color, Line
 
 from core.pipeline import process_file
 from core.db_utils import init_settings_db, init_cache_db, get_setting, set_setting
-from ui.workspace import WorkspaceWidget  # добавлено
+from ui.workspace import WorkspaceWidget
 
 class MainLayout(BoxLayout):
     def __init__(self, **kwargs):
@@ -25,7 +27,7 @@ class MainLayout(BoxLayout):
         init_cache_db()
         self.selected_file = None
 
-        self.workspace = WorkspaceWidget(size_hint_y=None, height=260)  # добавлено
+        self.workspace = WorkspaceWidget(size_hint_y=None, height=260)
 
         scroll = ScrollView(size_hint=(1, 1))
         content = BoxLayout(orientation="vertical", size_hint_y=None, padding=10, spacing=10)
@@ -57,7 +59,6 @@ class MainLayout(BoxLayout):
         settings_border.bind(pos=self.update_border, size=self.update_border)
 
         settings_box = BoxLayout(orientation="vertical", padding=[15, 10, 15, 15], spacing=10)
-
         settings_box.add_widget(Label(
             text="Settings", bold=True,
             size_hint_y=None, height=30,
@@ -104,14 +105,14 @@ class MainLayout(BoxLayout):
         settings_border.add_widget(settings_box)
         content.add_widget(settings_border)
 
-        # Workspace block (добавлен)
+        # Workspace block (step-wise progress bars)
         content.add_widget(self.workspace)
 
-        # Progress bar
-        self.progress = ProgressBar(max=100, size_hint_y=None, height=20)
-        content.add_widget(self.progress)
+        # Optional overall ProgressBar (not used in this version)
+        # self.progress = ProgressBar(max=100, size_hint_y=None, height=20)
+        # content.add_widget(self.progress)
 
-        # Result block
+        # Result block (status message)
         result_container = AnchorLayout(anchor_x='center', anchor_y='center', size_hint_y=None, height=140)
         self.result_label = Label(text='Ready')
         result_container.add_widget(self.result_label)
@@ -150,7 +151,7 @@ class MainLayout(BoxLayout):
             return
         self.result_label.text = "Processing..."
 
-        # Сброс прогресса
+        # Reset all step progress bars to 0
         for bar in self.workspace.step_widgets.values():
             bar.value = 0
 
@@ -164,21 +165,29 @@ class MainLayout(BoxLayout):
         }
         translator_code = translator_map.get(self.translator_spinner.text, 'h')
 
-        def ui_callback(step_index, progress):
-            steps = list(self.workspace.step_widgets.keys())
-            if 0 <= step_index < len(steps):
-                step = steps[step_index]
-                self.workspace.update_step_progress(step, progress)
+        # Define UI callback to update progress bars from background thread
+        def ui_callback(step, value):
+            Clock.schedule_once(lambda dt: self.workspace.set_progress(step, value), 0)
 
-        process_file(
-            audio_path=self.selected_file,
-            output_dir=os.path.dirname(self.selected_file),
-            translator_code=translator_code,
-            voice_choice=self.voice_spinner.text.lower(),
-            subtitle_mode=subtitle_mode,
-            ui_callback=ui_callback  # Новый параметр
-        )
-        self.result_label.text = "Done! Check output."
+        # Run the processing pipeline in a separate thread
+        def run_processing():
+            try:
+                process_file(
+                    audio_path=self.selected_file,
+                    output_dir=os.path.dirname(self.selected_file),
+                    translator_code=translator_code,
+                    voice_choice=self.voice_spinner.text.lower(),
+                    subtitle_mode=subtitle_mode,
+                    ui_callback=ui_callback
+                )
+            except Exception as e:
+                # If an error occurs during processing, update the UI with an error message
+                Clock.schedule_once(lambda dt, msg=f"Error: {e}": setattr(self.result_label, "text", msg), 0)
+                return
+            # On successful completion, update the UI status
+            Clock.schedule_once(lambda dt: setattr(self.result_label, "text", "Done! Check output."), 0)
+
+        threading.Thread(target=run_processing, daemon=True).start()
 
 class MVPApp(App):
     def build(self):
