@@ -5,8 +5,8 @@ try:
     from kivy.uix.button import Button
     from kivy.uix.label import Label
     from kivy.uix.screenmanager import Screen, ScreenManager
-    from kivy.uix.scrollview import ScrollView
     from kivy.uix.gridlayout import GridLayout
+    from kivy.uix.scrollview import ScrollView
     from kivy.core.window import Window
     from functools import partial
 except ModuleNotFoundError:
@@ -42,13 +42,10 @@ class ProjectBanner(BoxLayout):
 
     def update(self):
         app = App.get_running_app()
-        name = app.current_project['name'] if app.current_project else "None"
-        self.label.text = f"📂 Project: {name}"
+        self.label.text = f"📂 Project: {app.current_project['name']}"
 
     def switch_project(self, instance):
         app = App.get_running_app()
-        if not app.all_projects:
-            return
         index = app.all_projects.index(app.current_project)
         next_index = (index + 1) % len(app.all_projects)
         app.current_project = app.all_projects[next_index]
@@ -68,13 +65,11 @@ class ContextBanner(BoxLayout):
 
     def update(self):
         app = App.get_running_app()
-        f = app.current_project["current_file"] if app.current_project and app.current_project.get("current_file") else None
-        self.label.text = f"📁 File: {f['path']}" if f else "📁 No file selected"
+        f = app.current_project['current_file']
+        self.label.text = f"📁 File: {f['path']}"
 
     def change_file(self, instance):
         app = App.get_running_app()
-        if not app.current_project or not app.current_project["files"]:
-            return
         files = app.current_project["files"]
         idx = files.index(app.current_project["current_file"])
         next_idx = (idx + 1) % len(files)
@@ -89,157 +84,194 @@ class MediaPanel(BoxLayout):
         self.body = ScreenManager()
 
         self.tabs.add_widget(tab_button("Projects", partial(self.switch_screen, 'projects')))
-        self.tabs.add_widget(tab_button("New Project", partial(self.switch_screen, 'new_project')))
-        self.tabs.add_widget(tab_button("New File", partial(self.switch_screen, 'new_file')))
+        self.tabs.add_widget(tab_button("Files", partial(self.switch_screen, 'files')))
+        self.tabs.add_widget(tab_button("New", partial(self.switch_screen, 'new')))
+        self.tabs.add_widget(tab_button("History", partial(self.switch_screen, 'history')))
         self.tabs.add_widget(tab_button("Settings", partial(self.switch_screen, 'settings')))
 
         self.body.add_widget(MediaProjectsScreen(name='projects'))
-        self.body.add_widget(MediaNewProjectScreen(name='new_project'))
-        self.body.add_widget(MediaNewFileScreen(name='new_file'))
+        self.body.add_widget(MediaFilesScreen(name='files'))
+        self.body.add_widget(MediaNewScreen(name='new'))
+        self.body.add_widget(MediaHistoryScreen(name='history'))
         self.body.add_widget(MediaSettingsScreen(name='settings'))
 
         self.add_widget(self.tabs)
         self.add_widget(self.body)
 
     def switch_screen(self, screen_name, *args):
-        if screen_name == 'projects':
-            self.body.get_screen('projects').refresh()
+        if screen_name == 'files':
+            self.body.get_screen('files').refresh()
         self.body.current = screen_name
+
 
 class MediaProjectsScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        self.project_box = BoxLayout(orientation='vertical', spacing=10)
-        self.file_box = BoxLayout(orientation='vertical', spacing=10)
-        self.layout.add_widget(label_title("📂 Projects"))
-        self.layout.add_widget(self.project_box)
-        self.layout.add_widget(self.file_box)
+        self.layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
         self.add_widget(self.layout)
         self.refresh()
 
     def refresh(self):
-        self.project_box.clear_widgets()
-        self.file_box.clear_widgets()
+        self.layout.clear_widgets()
         app = App.get_running_app()
 
-        # Заголовки таблицы проектов
-        headers = BoxLayout(size_hint_y=None, height=30, spacing=5)
-        for h in ["Name", "Created", "Updated", "Parsed"]:
-            headers.add_widget(Label(text=h, color=(1, 1, 1, 1)))
-        self.project_box.add_widget(headers)
+        # ───── Project List ─────
+        header_row = BoxLayout(size_hint_y=None, height=40, spacing=10)
+        header_row.add_widget(label_title("📂 Project List"))
+        header_row.add_widget(Button(text="➕ Add Project", size_hint_x=None, width=160, on_release=self.add_project))
+        self.layout.add_widget(header_row)
+
+        table_header = BoxLayout(size_hint_y=None, height=40, spacing=10)
+        for h in ["Name", "Created", "Updated"]:
+            table_header.add_widget(Label(text=f"[b]{h}[/b]", markup=True, color=(1, 1, 1, 1)))
+        self.layout.add_widget(table_header)
 
         for proj in app.all_projects:
-            parsed = sum(1 for f in proj["files"] if f.get("parsed"))
-            total = len(proj["files"])
-            row = BoxLayout(size_hint_y=None, height=30, spacing=5)
-            btn = Button(text=proj["name"], size_hint_x=0.4)
-            btn.bind(on_release=partial(self.select_project, proj))
-            row.add_widget(btn)
+            is_current = proj == app.current_project
+            row = BoxLayout(size_hint_y=None, height=40, spacing=10)
+            row.add_widget(Button(
+                text=f"{'✔ ' if is_current else ''}{proj['name']}",
+                on_release=partial(self.select_project, proj),
+                background_color=(0.3, 0.3, 0.3, 1) if is_current else (0.2, 0.2, 0.2, 1)
+            ))
             row.add_widget(Label(text=proj.get("created", "-"), color=(1, 1, 1, 1)))
             row.add_widget(Label(text=proj.get("updated", "-"), color=(1, 1, 1, 1)))
-            row.add_widget(Label(text=f"{parsed} / {total}", color=(1, 1, 1, 1)))
-            self.project_box.add_widget(row)
+            self.layout.add_widget(row)
 
-        # Таблица файлов выбранного проекта
+        # ───── File List (only if a project is selected) ─────
         if app.current_project:
-            self.file_box.add_widget(label_title(f"📁 Files in {app.current_project['name']}"))
-            headers = BoxLayout(size_hint_y=None, height=30, spacing=5)
-            for h in ["File", "Settings", "Updated", "Parsed"]:
-                headers.add_widget(Label(text=h, color=(1, 1, 1, 1)))
-            self.file_box.add_widget(headers)
+            file_header_row = BoxLayout(size_hint_y=None, height=40, spacing=10)
+            file_header_row.add_widget(label_title(f"📁 Files in {app.current_project['name']}"))
+            file_header_row.add_widget(Button(text="➕ Add File", size_hint_x=None, width=140, on_release=self.add_file))
+            self.layout.add_widget(file_header_row)
+
+            file_table_header = BoxLayout(size_hint_y=None, height=40, spacing=10)
+            for h in ["Name", "Created", "Updated"]:
+                file_table_header.add_widget(Label(text=f"[b]{h}[/b]", markup=True, color=(1, 1, 1, 1)))
+            self.layout.add_widget(file_table_header)
 
             for f in app.current_project["files"]:
-                row = BoxLayout(size_hint_y=None, height=30, spacing=5)
-                btn = Button(text=f["path"], size_hint_x=0.4)
-                btn.bind(on_release=partial(self.select_file, f))
-                row.add_widget(btn)
-                settings = f.get("settings", {})
-                settings_str = f"{settings.get('translator', '-')}/{settings.get('subtitles', '-')}/{settings.get('voice', '-')}"
-                row.add_widget(Label(text=settings_str, color=(1, 1, 1, 1)))
+                is_current = f == app.current_project["current_file"]
+                row = BoxLayout(size_hint_y=None, height=40, spacing=10)
+                row.add_widget(Button(
+                    text=f"{'✔ ' if is_current else ''}{f['path']}",
+                    on_release=partial(self.set_file, f),
+                    background_color=(0.3, 0.3, 0.3, 1) if is_current else (0.2, 0.2, 0.2, 1)
+                ))
+                row.add_widget(Label(text=f.get("created", "-"), color=(1, 1, 1, 1)))
                 row.add_widget(Label(text=f.get("updated", "-"), color=(1, 1, 1, 1)))
-                row.add_widget(Label(text="✅" if f.get("parsed") else "❌", color=(1, 1, 1, 1)))
-                self.file_box.add_widget(row)
+                self.layout.add_widget(row)
 
-    def select_project(self, proj, *args):
+    def select_project(self, project, *args):
         app = App.get_running_app()
-        app.current_project = proj
-        app.root.ids.workspace.context_banner.update()
+        app.current_project = project
         self.refresh()
+        app.root.ids.workspace.context_banner.update()
 
-    def select_file(self, file_obj, *args):
+    def set_file(self, file_obj, *args):
         app = App.get_running_app()
         app.current_project["current_file"] = file_obj
-        app.root.ids.workspace.context_banner.update()
         self.refresh()
+        app.root.ids.workspace.context_banner.update()
 
-class MediaNewProjectScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(label_title("➕ New Project"))
-        create_btn = dummy_button("Create Dummy Project")
-        create_btn.bind(on_release=self.create_dummy_project)
-        layout.add_widget(create_btn)
-        self.add_widget(layout)
-
-    def create_dummy_project(self, *args):
+    def add_project(self, instance):
         app = App.get_running_app()
-        idx = len(app.all_projects) + 1
-        today = datetime.date.today().isoformat()
-        new_proj = {
-            "name": f"Project {idx}",
-            "created": today,
-            "updated": today,
+        now = datetime.date.today().isoformat()
+        n = len(app.all_projects) + 1
+        new_project = {
+            "name": f"Project {n}",
+            "created": now,
+            "updated": now,
             "files": [],
             "current_file": None
         }
-        app.all_projects.append(new_proj)
-        app.current_project = new_proj
-        app.root.ids.workspace.set_panel("media")
+        app.all_projects.append(new_project)
+        app.current_project = new_project
+        self.refresh()
+        app.root.ids.workspace.context_banner.update()
 
-
-class MediaNewFileScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(label_title("➕ Add File to Current Project"))
-        add_btn = dummy_button("Add Dummy File")
-        add_btn.bind(on_release=self.add_dummy_file)
-        layout.add_widget(add_btn)
-        self.add_widget(layout)
-
-    def add_dummy_file(self, *args):
+    def add_file(self, instance):
         app = App.get_running_app()
-        if not app.current_project:
-            return
-        today = datetime.date.today().isoformat()
-        count = len(app.current_project["files"]) + 1
+        now = datetime.date.today().isoformat()
+        n = len(app.current_project["files"]) + 1
         new_file = {
-            "path": f"file_{count}.mp3",
-            "created": today,
-            "updated": today,
-            "parsed": False,
-            "settings": {
-                "translator": "GPT",
-                "subtitles": "bilingual",
-                "voice": "male"
-            }
+            "path": f"file_{n}.mp3",
+            "created": now,
+            "updated": now
         }
         app.current_project["files"].append(new_file)
         app.current_project["current_file"] = new_file
+        self.refresh()
+        app.root.ids.workspace.context_banner.update()
+
+class MediaFilesScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        self.add_widget(self.layout)
+        self.refresh()
+
+    def refresh(self):
+        self.layout.clear_widgets()
+        self.layout.add_widget(label_title("📁 Files in Project"))
+
+        header = BoxLayout(size_hint_y=None, height=40, spacing=10)
+        for h in ["Name", "Created", "Updated"]:
+            header.add_widget(Label(text=f"[b]{h}[/b]", markup=True, color=(1, 1, 1, 1)))
+        self.layout.add_widget(header)
+
+        scroll = ScrollView()
+        container = BoxLayout(orientation='vertical', size_hint_y=None, spacing=10, padding=5)
+        container.bind(minimum_height=container.setter('height'))
+
+        app = App.get_running_app()
+        current = app.current_project["current_file"]
+        for f in app.current_project['files']:
+            row = BoxLayout(size_hint_y=None, height=40, spacing=10)
+            prefix = "[✔] " if f == current else ""
+            btn = Button(text=prefix + f["path"], on_release=partial(self.set_file, f))
+            row.add_widget(btn)
+            row.add_widget(Label(text=f.get("created", "-"), color=(1, 1, 1, 1)))
+            row.add_widget(Label(text=f.get("updated", "-"), color=(1, 1, 1, 1)))
+            container.add_widget(row)
+
+        scroll.add_widget(container)
+        self.layout.add_widget(scroll)
+
+    def set_file(self, file_obj, *args):
+        app = App.get_running_app()
+        app.current_project['current_file'] = file_obj
+        self.refresh()
         app.root.ids.workspace.set_panel("media")
 
+
+class MediaNewScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        layout.add_widget(label_title("📥 Upload and Process"))
+        layout.add_widget(dummy_button("Upload File"))
+        layout.add_widget(dummy_button("Start Processing"))
+        self.add_widget(layout)
+
+class MediaHistoryScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        layout.add_widget(label_title("📜 History"))
+        layout.add_widget(dummy_button("Show Processed Files"))
+        self.add_widget(layout)
 
 class MediaSettingsScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(label_title("⚙️ Project Settings"))
+        layout.add_widget(label_title("⚙️ Settings"))
         layout.add_widget(dummy_button("Translator: GPT"))
         layout.add_widget(dummy_button("Voice: Male"))
         layout.add_widget(dummy_button("Subtitles: Bilingual"))
         self.add_widget(layout)
+
 
 class AnalyzePanel(BoxLayout):
     def __init__(self, **kwargs):
@@ -264,17 +296,16 @@ class AnalyzeParseScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(label_title("🔍 Parse File"))
+        layout.add_widget(label_title("🔍 Parsing"))
         layout.add_widget(dummy_button("Run Linguistic Parsing"))
         self.add_widget(layout)
-
 
 class AnalyzeVisualizeScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(label_title("🌳 Visualize Parse Tree"))
-        layout.add_widget(dummy_button("Show Linguistic Tree"))
+        layout.add_widget(label_title("🌳 Visualization"))
+        layout.add_widget(dummy_button("Show Parse Tree"))
         self.add_widget(layout)
 
 class VocabularyPanel(BoxLayout):
@@ -305,8 +336,8 @@ class VocabularyProjectDictScreen(Screen):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
         layout.add_widget(label_title("📚 Project Dictionary"))
-        layout.add_widget(dummy_button("Merge all file dictionaries"))
-        layout.add_widget(dummy_button("Show Project Glossary"))
+        layout.add_widget(dummy_button("Show all terms from all files"))
+        layout.add_widget(dummy_button("Merge / Export Global Dict"))
         self.add_widget(layout)
 
 
@@ -315,7 +346,7 @@ class VocabularyFileDictScreen(Screen):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
         layout.add_widget(label_title("📘 File Dictionary"))
-        layout.add_widget(dummy_button("Show Current File Terms"))
+        layout.add_widget(dummy_button("Show terms for current file"))
         layout.add_widget(dummy_button("Export as Flashcards"))
         self.add_widget(layout)
 
@@ -324,7 +355,7 @@ class VocabularyExportScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(label_title("📤 Export Vocabulary"))
+        layout.add_widget(label_title("📤 Export"))
         layout.add_widget(dummy_button("Export as JSON"))
         layout.add_widget(dummy_button("Export as CSV"))
         self.add_widget(layout)
@@ -334,9 +365,8 @@ class VocabularyTrainingScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        layout.add_widget(label_title("🧠 Vocabulary Training"))
+        layout.add_widget(label_title("🧠 Training"))
         layout.add_widget(dummy_button("Start Quiz"))
-        layout.add_widget(dummy_button("Start Flashcard Session"))
         self.add_widget(layout)
 
 class WorkspaceScreen(Screen):
@@ -353,6 +383,7 @@ class WorkspaceScreen(Screen):
         self.main_layout.add_widget(self.panel_container)
         self.main_layout.add_widget(self.context_banner)
         self.add_widget(self.main_layout)
+
 
     def set_panel(self, panel_name):
         self.current_panel = panel_name
@@ -380,51 +411,32 @@ class MenuBar(BoxLayout):
             btn.bind(on_release=lambda inst, n=name.lower(): self.workspace.set_panel(n))
             self.add_widget(btn)
 
+
 class MainApp(App):
     def build(self):
-        today = datetime.date.today().isoformat()
         self.all_projects = [
             {
                 "name": "Demo Project",
-                "created": today,
-                "updated": today,
+                "created": "2024-04-30",
+                "updated": "2024-05-12",
                 "files": [
-                    {
-                        "path": "intro_lesson.mp3",
-                        "created": today,
-                        "updated": today,
-                        "parsed": True,
-                        "settings": {"translator": "GPT", "subtitles": "bilingual", "voice": "male"}
-                    },
-                    {
-                        "path": "episode_5.wav",
-                        "created": today,
-                        "updated": today,
-                        "parsed": False,
-                        "settings": {"translator": "HF", "subtitles": "ru-only", "voice": "female"}
-                    }
+                    {"path": "intro_lesson.mp3", "created": "2024-05-01", "updated": "2024-05-10"},
+                    {"path": "episode_5.wav", "created": "2024-05-05", "updated": "2024-05-11"}
                 ],
-                "current_file": None
+                "current_file": {"path": "intro_lesson.mp3", "created": "2024-05-01", "updated": "2024-05-10"}
             },
             {
-                "name": "Podcast",
-                "created": today,
-                "updated": today,
+                "name": "Listening Practice",
+                "created": "2024-06-01",
+                "updated": "2024-06-02",
                 "files": [
-                    {
-                        "path": "episode_1.mp3",
-                        "created": today,
-                        "updated": today,
-                        "parsed": True,
-                        "settings": {"translator": "GPT", "subtitles": "bilingual", "voice": "male"}
-                    }
+                    {"path": "bbc_news.mp3", "created": "2024-06-01", "updated": "2024-06-01"}
                 ],
-                "current_file": None
+                "current_file": {"path": "bbc_news.mp3", "created": "2024-06-01", "updated": "2024-06-01"}
             }
         ]
 
-        self.current_project = self.all_projects[0]
-        self.current_project["current_file"] = self.current_project["files"][0]
+        self.current_project = None
 
         root = BoxLayout(orientation='vertical')
         root.ids = {}
@@ -432,6 +444,7 @@ class MainApp(App):
         root.add_widget(ProjectBanner())
         workspace_screen = WorkspaceScreen(name='workspace')
         root.ids["workspace"] = workspace_screen
+
         root.add_widget(MenuBar(workspace_screen))
         root.add_widget(workspace_screen)
 

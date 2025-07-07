@@ -15,7 +15,7 @@ class WorkspaceWidget(BoxLayout):
             "Loading file",
             "Transcribing audio",
             "Translating text",
-            "Generating audio",
+            "Generating media",
             "Exporting files"
         ]
         for step_name in self.step_names:

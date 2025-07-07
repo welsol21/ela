@@ -51,7 +51,7 @@ class MainLayout(BoxLayout):
         self.file_label = Label(text="No file selected", size_hint_y=None, height=30)
         content.add_widget(self.file_label)
 
-        # Settings block with border
+        # Creating subtitles block with border
         settings_border = BoxLayout(orientation="vertical", size_hint_y=None, height=280)
         with settings_border.canvas.before:
             Color(1, 1, 0, 1)
@@ -60,7 +60,7 @@ class MainLayout(BoxLayout):
 
         settings_box = BoxLayout(orientation="vertical", padding=[15, 10, 15, 15], spacing=10)
         settings_box.add_widget(Label(
-            text="Settings", bold=True,
+            text="Creating subtitles", bold=True,
             size_hint_y=None, height=30,
             color=(1, 1, 0, 1)
         ))
@@ -69,7 +69,7 @@ class MainLayout(BoxLayout):
         self.settings.bind(minimum_height=self.settings.setter("height"))
 
         self.translator_spinner = Spinner(
-            text='GPT',
+            text='HuggingFace',
             values=['GPT', 'DeepL', 'LaraAPI', 'HuggingFace', 'Original'],
             size_hint_y=None, height=40
         )
