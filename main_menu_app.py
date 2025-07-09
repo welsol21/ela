@@ -1,5 +1,6 @@
 # main_menu_app.py
 import os
+import time
 import threading
 import datetime as dt
 from functools import partial
@@ -151,6 +152,64 @@ Builder.load_string(r"""
         spacing: 10
         padding: 10
 
+        # Проект и файл
+        Label:
+            id: project_label
+            text: ""
+            color: 1,1,0,1
+            font_size: "20sp"
+            size_hint_y: None
+            height: 30
+
+        Label:
+            id: file_label
+            text: ""
+            color: 1,1,0,1
+            font_size: "18sp"
+            size_hint_y: None
+            height: 26
+
+        # Настройки (спиннеры как в New File)
+        GridLayout:
+            cols: 2
+            spacing: 8
+            size_hint_y: None
+            height: self.minimum_height
+
+            Label:
+                text: "Translator:"
+                size_hint_y: None
+                height: 30
+            Spinner:
+                id: an_tr
+                text: "GPT"
+                values: ["GPT", "HuggingFace", "DeepL", "Original"]
+                size_hint_y: None
+                height: 36
+
+            Label:
+                text: "Subtitles:"
+                size_hint_y: None
+                height: 30
+            Spinner:
+                id: an_sub
+                text: "Bilingual"
+                values: ["English only", "Bilingual sequential", "Bilingual simultaneous", "English + Russian subs", "Bilingual audio + Russian subs"]
+                size_hint_y: None
+                height: 36
+
+            Label:
+                text: "Voice:"
+                size_hint_y: None
+                height: 30
+            Spinner:
+                id: an_voice
+                text: "Male"
+                values: ["Male", "Female"]
+                size_hint_y: None
+                height: 36
+
+        # Статус и прогресс-бары
         Label:
             id: status
             text: ""
@@ -204,12 +263,12 @@ class DB:
         proj["files"].append({**data, "updated": cls.today(), "analyzed": False})
         proj["updated"] = cls.today()
 
+
 def dummy_process(path, ui_cb):
-    steps = ["transcribe", "translate", "synthesize", "mux", "analyze"]
-    for s in steps:
+    for name in ["loading", "transcribing", "translating", "generating", "exporting"]:
         for p in range(0, 101, 5):
-            Clock.sleep(0.02)
-            ui_cb(s, p)
+            time.sleep(0.02)
+            ui_cb(name, p)
 
 
 # ───────────── Table и Workspace ─────────────
@@ -273,29 +332,36 @@ class Table(BoxLayout):
 
 
 class Workspace(BoxLayout):
-    steps = ["transcribe","translate","synthesize","mux","analyze"]
+    # новые идентификаторы шагов
+    steps = ["loading", "transcribing", "translating", "generating", "exporting"]
+    # человекочитаемые названия
     titles = {
-        "transcribe":"Transcribe",
-        "translate":"Translate",
-        "synthesize":"TTS",
-        "mux":"Mux",
-        "analyze":"Analyze"
+        "loading":       "Loading file",
+        "transcribing":  "Transcribing audio",
+        "translating":   "Translating text",
+        "generating":    "Generating media",
+        "exporting":     "Exporting files",
     }
 
     def __init__(self, **kw):
         super().__init__(orientation="vertical", spacing=4, **kw)
         self.bars = {}
-        for s in self.steps:
+        for step in self.steps:
             bar = ProgressBar(max=100, height=18)
-            lbl = Label(text=self.titles[s],
-                        size_hint_x=None, width=100, font_size=12)
+            lbl = Label(
+                text=self.titles[step],
+                size_hint_x=None, width=140,  # расширил под более длинный текст
+                font_size=12, valign="middle", halign="left"
+            )
+            lbl.bind(size=lbl.setter('text_size'))  # для корректного выравнивания
             row = BoxLayout(size_hint_y=None, height=18)
             row.add_widget(lbl)
             row.add_widget(bar)
             self.add_widget(row)
-            self.bars[s] = bar
+            self.bars[step] = bar
 
     def set(self, step, val):
+        # устанавливаем прогресс для указанного шага
         if step in self.bars:
             self.bars[step].value = val
 
@@ -350,7 +416,7 @@ class Files(Screen):
                     f["name"],
                     f"Transl: {f['translator']} / Subs: {f['subtitles']} / Voice: {f['voice']}",
                     f["updated"],
-                    "НYes" if f["analyzed"] else "No"
+                    "Yes" if f["analyzed"] else "No"
                 ],
                 press=partial(self.select_file, f)
             )
@@ -405,6 +471,21 @@ class NewFile(Screen):
 
 class Analyze(Screen):
     def on_pre_enter(self):
+        # Название проекта и файла
+        self.ids.project_label.text = DB.cur_proj["name"] if DB.cur_proj else ""
+        self.ids.file_label.text = DB.cur_file["name"]  if DB.cur_file else ""
+
+        # Заполним спиннеры текущими настройками
+        if DB.cur_file:
+            self.ids.an_tr.text = DB.cur_file.get("translator", "GPT")
+            self.ids.an_sub.text = DB.cur_file.get("subtitles",  "Bilingual")
+            self.ids.an_voice.text = DB.cur_file.get("voice",      "Male")
+        else:
+            self.ids.an_tr.text = "GPT"
+            self.ids.an_sub.text = "Bilingual"
+            self.ids.an_voice.text = "Male"
+
+        # Сброс статуса и прогресса
         self.ids.status.text = ""
         for b in self.ids.ws.bars.values():
             b.value = 0
