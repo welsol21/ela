@@ -37,12 +37,6 @@ Builder.load_string(r"""
     BoxLayout:
         orientation: "vertical"
         spacing: 10
-        Button:
-            id: btn_top
-            text: "New Project"
-            size_hint_y: None
-            height: 44
-            on_release: root.top_action()
         Table:
             id: tbl
             headers: ["Name", "Created", "Updated", "Analyzed"]
@@ -51,11 +45,6 @@ Builder.load_string(r"""
     BoxLayout:
         orientation: "vertical"
         spacing: 12
-        Button:
-            text: "Back"
-            size_hint_y: None
-            height: 44
-            on_release: root.top_action()
         Label:
             text: "New Project"
             color: 1,1,0,1
@@ -78,12 +67,6 @@ Builder.load_string(r"""
     BoxLayout:
         orientation: "vertical"
         spacing: 10
-        Button:
-            id: btn_top
-            text: "New File"
-            size_hint_y: None
-            height: 44
-            on_release: root.top_action()
         Label:
             id: project_label
             text: ""
@@ -99,13 +82,6 @@ Builder.load_string(r"""
     BoxLayout:
         orientation: "vertical"
         spacing: 10
-
-        Button:
-            id: btn_top
-            text: "Back"
-            size_hint_y: None
-            height: 44
-            on_release: root.top_action()
 
         Label:
             id: project_label
@@ -338,7 +314,8 @@ class Projects(Screen):
 
     def select(self, proj, *_):
         DB.cur_proj = proj
-        self.manager.parent.open_files()
+        # переключаем основной ScreenManager на экран файлов
+        self.manager.current = "files"
 
     def top_action(self):
         self.manager.transition.direction = "left"
@@ -373,14 +350,15 @@ class Files(Screen):
                     f["name"],
                     f"Transl: {f['translator']} / Subs: {f['subtitles']} / Voice: {f['voice']}",
                     f["updated"],
-                    "✅" if f["analyzed"] else "❌"
+                    "НYes" if f["analyzed"] else "No"
                 ],
                 press=partial(self.select_file, f)
             )
 
     def select_file(self, f, *_):
         DB.cur_file = f
-        self.manager.parent.ids.sm.current = "analyze"
+        # переключаем основной ScreenManager на Analyze
+        self.manager.current = "analyze"
 
     def top_action(self):
         self.manager.transition.direction = "left"
@@ -477,9 +455,14 @@ class ELAApp(App):
 
         # нижняя навигация
         nav = BoxLayout(size_hint_y=None, height=48)
-        for title in ("Media", "Analyze", "Vocabulary"):
+        mapping = {
+            "Media":      "projects",     # вместо 'media'
+            "Analyze":    "analyze",
+            "Vocabulary": "vocabulary",
+        }
+        for title, screen_name in mapping.items():
             btn = Button(text=title)
-            btn.bind(on_release=lambda _, t=title.lower(): setattr(sm, "current", t))
+            btn.bind(on_release=lambda _, t=screen_name: setattr(sm, "current", t))
             nav.add_widget(btn)
         root.add_widget(nav)
 
@@ -491,20 +474,29 @@ class ELAApp(App):
     def _update_top(self, sm, cur):
         if cur == "projects":
             self.top_btn.text = "New Project"
+        elif cur == "new_project":
+            self.top_btn.text = "Back"
         elif cur == "files":
             self.top_btn.text = "New File"
+        elif cur == "new_file":
+            self.top_btn.text = "Back"
         else:
             self.top_btn.text = "Back"
 
     def _on_top(self, *a):
         cur = self.sm.current
+        # Переключение по нажатию верхней кнопки
         if cur == "projects":
             self.sm.current = "new_project"
+        elif cur == "new_project":
+            self.sm.current = "projects"
         elif cur == "files":
             self.sm.current = "new_file"
+        elif cur == "new_file":
+            self.sm.current = "files"
         else:
-            mapping = {"new_project": "projects", "new_file": "files"}
-            self.sm.current = mapping.get(cur, "projects")
+            # для Analyze/Vocabulary просто возвращаемся в проекты
+            self.sm.current = "projects"
 
 
 if __name__ == "__main__":
