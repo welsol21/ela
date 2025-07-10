@@ -421,7 +421,7 @@ class Files(Screen):
             )
     def select_file(self, f, *_):
         DB.cur_file = f
-        self.manager.current = "analyze"
+        self.manager.current = "analyze_detail"
         
 class NewFile(Screen):
     selected_path = StringProperty("Choose file")
@@ -540,4 +540,13 @@ if __name__=="__main__":
         "subtitles":"Bilingual","voice":"Male",
         "path":"/fake/path/file1.mp3"
     })
+    # добавляем второй (уже проанализированный) файл
+    DB.add_file(DB.projects[0], {
+        "name":"File 2.mp3","translator":"GPT",
+        "subtitles":"Bilingual","voice":"Male",
+        "path":"/fake/path/file2.mp3"
+    })
+    # вручную помечаем его как проанализированный
+    DB.projects[0]["files"][-1]["analyzed"] = True
+
     ELAApp().run()
