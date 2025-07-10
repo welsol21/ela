@@ -38,6 +38,12 @@ Builder.load_string(r"""
     BoxLayout:
         orientation: "vertical"
         spacing: 10
+        Label:
+            text: "Projects"
+            color: 1,1,0,1
+            font_size: "24sp"
+            size_hint_y: None
+            height: 40
         Table:
             id: tbl
             headers: ["Name", "Created", "Updated", "Analyzed"]
