@@ -1,5 +1,4 @@
 # main_menu_app.py
-# main_menu_app.py
 import os
 import time
 import threading
@@ -288,7 +287,6 @@ def dummy_process(path, ui_cb):
             time.sleep(0.02)
             ui_cb(name, p)
 
-
 # ───────────── Table и Workspace ─────────────
 
 class _Cell(Label):
@@ -384,6 +382,7 @@ class Workspace(BoxLayout):
             self.bars[step].value = val
 
 # ───────────── Экраны ─────────────
+
 class Projects(Screen):
     def on_pre_enter(self):
         tbl = self.ids.tbl
@@ -394,21 +393,25 @@ class Projects(Screen):
                 [p["name"], p["created"], p["updated"], f"{cnt}/{len(p['files'])}"],
                 press=partial(self.select, p)
             )
+
     def select(self, proj, *_):
         DB.cur_proj = proj
-        self.manager.current = "files"
+        App.get_running_app().go("files")
 
 class NewProject(Screen):
     def on_pre_enter(self):
         self.ids.name_input.text = ""
+
     def create(self):
         nm = self.ids.name_input.text.strip()
-        if nm: DB.add_project(nm)
-        self.manager.current = "projects"
+        if nm:
+            DB.add_project(nm)
+        App.get_running_app().go("projects")
 
 class Files(Screen):
     def on_pre_enter(self):
-        if not DB.cur_proj: return
+        if not DB.cur_proj:
+            return
         self.ids.project_label.text = DB.cur_proj["name"]
         tbl = self.ids.tbl; tbl.clear()
         for f in DB.cur_proj["files"]:
@@ -419,24 +422,29 @@ class Files(Screen):
                  "Yes" if f["analyzed"] else "No"],
                 press=partial(self.select_file, f)
             )
+
     def select_file(self, f, *_):
         DB.cur_file = f
-        self.manager.current = "analyze_detail"
-        
+        App.get_running_app().go("analyze_detail")
+
 class NewFile(Screen):
     selected_path = StringProperty("Choose file")
+
     def on_pre_enter(self):
         self.ids.status.text = ""
         self.selected_path = "Choose file"
         self.ids.project_label.text = DB.cur_proj["name"] if DB.cur_proj else ""
+
     def choose_file(self):
         fc = FileChooserIconView(filters=["*.mp3","*.wav","*.txt","*.pdf"])
-        mv = ModalView(size_hint=(0.9,0.9))
+        mv = ModalView(size_hint=(0.9, 0.9))
         fc.bind(on_submit=lambda inst, sel, *_: (setattr(self, 'selected_path', os.path.basename(sel[0])) if sel else None, mv.dismiss()))
         mv.add_widget(fc); mv.open()
+
     def create(self):
-        if self.selected_path=="Choose file":
-            self.ids.status.text="[color=ff3333]Choose a file[/color]"; return
+        if self.selected_path == "Choose file":
+            self.ids.status.text = "[color=ff3333]Choose a file[/color]"
+            return
         DB.add_file(DB.cur_proj, {
             "name": self.selected_path,
             "translator": self.ids.translator.text,
@@ -444,7 +452,7 @@ class NewFile(Screen):
             "voice": self.ids.voice.text,
             "path": self.selected_path
         })
-        self.manager.current = "files"
+        App.get_running_app().go("files")
 
 # ─── Новый экран списка файлов для Analyze ───
 class AnalyzeList(Screen):
@@ -458,49 +466,57 @@ class AnalyzeList(Screen):
                      f["updated"]],
                     press=partial(self.select_file, proj, f)
                 )
+
     def select_file(self, proj, f, *_):
         DB.cur_proj = proj
         DB.cur_file = f
-        self.manager.current = "analyze_detail"
+        App.get_running_app().go("analyze_detail")
 
 # ─── Экран детализации анализа ───
 class AnalyzeDetail(Screen):
     def on_pre_enter(self):
-        # Названия
         self.ids.project_label.text = DB.cur_proj["name"] if DB.cur_proj else ""
-        self.ids.file_label.text    = DB.cur_file["name"]  if DB.cur_file else ""
-        # Спиннеры
+        self.ids.file_label.text = DB.cur_file["name"] if DB.cur_file else ""
         if DB.cur_file:
-            self.ids.an_tr.text    = DB.cur_file.get("translator","GPT")
-            self.ids.an_sub.text   = DB.cur_file.get("subtitles","Bilingual")
-            self.ids.an_voice.text = DB.cur_file.get("voice","Male")
-        # Сброс прогресса
+            self.ids.an_tr.text = DB.cur_file.get("translator", "GPT")
+            self.ids.an_sub.text = DB.cur_file.get("subtitles", "Bilingual")
+            self.ids.an_voice.text = DB.cur_file.get("voice", "Male")
         self.ids.status.text = ""
-        for b in self.ids.ws.bars.values(): b.value = 0
+        for b in self.ids.ws.bars.values():
+            b.value = 0
+
     def start(self):
         f = DB.cur_file
         if not f:
-            self.ids.status.text="[color=ff3333]Select file first[/color]"; return
-        def ui_cb(step,val): Clock.schedule_once(lambda *_: self.ids.ws.set(step,val),0)
+            self.ids.status.text = "[color=ff3333]Select file first[/color]"
+            return
+        def ui_cb(step, val):
+            Clock.schedule_once(lambda *_: self.ids.ws.set(step, val), 0)
         def run_proc():
             dummy_process(f["path"], ui_cb)
-            f["analyzed"]=True
-            Clock.schedule_once(lambda *_: setattr(self.ids.status,"text","[color=33ff33]Done[/color]"),0)
-        threading.Thread(target=run_proc,daemon=True).start()
+            f["analyzed"] = True
+            Clock.schedule_once(lambda *_: setattr(self.ids.status, "text", "[color=33ff33]Done[/color]"), 0)
+        threading.Thread(target=run_proc, daemon=True).start()
 
-class Vocabulary(Screen): pass
+class Vocabulary(Screen):
+    pass
 
 # ───────────── Запуск приложения ─────────────
 class ELAApp(App):
     def build(self):
         root = BoxLayout(orientation="vertical")
+
         # верхняя кнопка
         self.top_btn = Button(text="Back", size_hint_y=None, height=44)
-        self.top_btn.bind(on_release=self._on_top); root.add_widget(self.top_btn)
+        self.top_btn.bind(on_release=lambda *_: self.go_back())
+        root.add_widget(self.top_btn)
+
         # ScreenManager
-        sm = ScreenManager(transition=SlideTransition()); self.sm = sm
+        sm = ScreenManager(transition=SlideTransition())
+        self.sm = sm
+        self.history = []  # стек навигации
         root.add_widget(sm)
-        # регистрируем экраны
+
         sm.add_widget(Projects(name="projects"))
         sm.add_widget(NewProject(name="new_project"))
         sm.add_widget(Files(name="files"))
@@ -508,45 +524,54 @@ class ELAApp(App):
         sm.add_widget(AnalyzeList(name="analyze"))
         sm.add_widget(AnalyzeDetail(name="analyze_detail"))
         sm.add_widget(Vocabulary(name="vocabulary"))
-        # днище-навигатор
+
+        # нижняя навигация
         nav = BoxLayout(size_hint_y=None, height=48)
-        for title,screen in [("Media","projects"),("Analyze","analyze"),("Vocabulary","vocabulary")]:
-            btn=Button(text=title); btn.bind(on_release=lambda _,s=screen: setattr(sm,"current",s)); nav.add_widget(btn)
+        for title, screen in [("Media", "projects"), ("Analyze", "analyze"), ("Vocabulary", "vocabulary")]:
+            btn = Button(text=title)
+            btn.bind(on_release=lambda _, s=screen: App.get_running_app().go(s))
+            nav.add_widget(btn)
         root.add_widget(nav)
-        # обновляем текст верхней кнопки
+
         sm.bind(current=self._update_top)
-        sm.current="projects"
+        sm.current = "projects"
         return root
 
     def _update_top(self, sm, cur):
-        if cur=="projects":      self.top_btn.text="New Project"
-        elif cur=="new_project": self.top_btn.text="Back"
-        elif cur=="files":       self.top_btn.text="New File"
-        elif cur=="new_file":    self.top_btn.text="Back"
-        else:                    self.top_btn.text="Back"
+        if cur == "projects":
+            self.top_btn.text = "New Project"
+        elif cur == "new_project":
+            self.top_btn.text = "Back"
+        elif cur == "files":
+            self.top_btn.text = "New File"
+        elif cur == "new_file":
+            self.top_btn.text = "Back"
+        else:
+            self.top_btn.text = "Back"
 
-    def _on_top(self, *a):
-        cur=self.sm.current
-        if cur=="projects":      self.sm.current="new_project"
-        elif cur=="new_project": self.sm.current="projects"
-        elif cur=="files":       self.sm.current="new_file"
-        elif cur=="new_file":    self.sm.current="files"
-        else:                    self.sm.current="projects"
+    def go(self, screen_name):
+        self.history.append(self.sm.current)
+        self.sm.current = screen_name
 
-if __name__=="__main__":
+    def go_back(self):
+        if self.history:
+            prev = self.history.pop()
+            self.sm.current = prev
+        else:
+            self.sm.current = "projects"
+
+if __name__ == "__main__":
     DB.add_project("Project A")
     DB.add_file(DB.projects[0], {
-        "name":"File 1.mp3","translator":"GPT",
-        "subtitles":"Bilingual","voice":"Male",
-        "path":"/fake/path/file1.mp3"
+        "name": "File 1.mp3", "translator": "GPT",
+        "subtitles": "Bilingual", "voice": "Male",
+        "path": "/fake/path/file1.mp3"
     })
-    # добавляем второй (уже проанализированный) файл
+    # добавляем второй файл и помечаем его проанализированным
     DB.add_file(DB.projects[0], {
-        "name":"File 2.mp3","translator":"GPT",
-        "subtitles":"Bilingual","voice":"Male",
-        "path":"/fake/path/file2.mp3"
+        "name": "File 2.mp3", "translator": "GPT",
+        "subtitles": "Bilingual", "voice": "Male",
+        "path": "/fake/path/file2.mp3"
     })
-    # вручную помечаем его как проанализированный
     DB.projects[0]["files"][-1]["analyzed"] = True
-
     ELAApp().run()
