@@ -535,6 +535,7 @@ class ELAApp(App):
 
         sm.bind(current=self._update_top)
         sm.current = "projects"
+        self._update_top(sm, sm.current)
         return root
 
     def _update_top(self, sm, cur):
