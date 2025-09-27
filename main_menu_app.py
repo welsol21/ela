@@ -27,6 +27,8 @@ from kivy.uix.screenmanager import Screen, ScreenManager, SlideTransition
 from kivy.uix.checkbox import CheckBox
 from kivy.uix.togglebutton import ToggleButton
 from kivy.lang import Builder
+from kivy.properties import StringProperty, DictProperty
+from kivy.properties import DictProperty
 
 
 # ─────────── DataStore и fake-пайплайн ───────────
@@ -172,6 +174,7 @@ def dummy_process(path, ui_cb):
 
 # ───────────── Table и Workspace ─────────────
 
+
 class _Cell(Label):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -189,8 +192,10 @@ class _Cell(Label):
             Color(0.3, 0.3, 0.3, 1)
             Line(rectangle=(*self.pos, *self.size), width=1)
 
+
 class _Row(ButtonBehavior, GridLayout):
     pass
+
 
 class Table(BoxLayout):
     headers = ListProperty([])
@@ -230,6 +235,7 @@ class Table(BoxLayout):
             row.bind(on_release=press)
         self.body.add_widget(row)
 
+
 class Workspace(BoxLayout):
     steps = ["loading", "transcribing", "translating", "generating", "exporting"]
     titles = {
@@ -263,6 +269,7 @@ class Workspace(BoxLayout):
 
 # ───────────── Экраны ─────────────
 
+
 class Projects(Screen):
     def on_pre_enter(self):
         tbl = self.ids.tbl
@@ -278,6 +285,7 @@ class Projects(Screen):
         DB.cur_proj = proj
         App.get_running_app().go("files")
 
+
 class NewProject(Screen):
     def on_pre_enter(self):
         self.ids.name_input.text = ""
@@ -288,7 +296,18 @@ class NewProject(Screen):
             DB.add_project(nm)
         App.get_running_app().go("projects")
 
+
 class Files(Screen):
+    project_name = StringProperty("")
+    project_ref = DictProperty({})
+
+    def set_project(self, name: str):
+        """Вызывается при входе в экран проекта."""
+        self.project_name = name
+        self.project_ref = DB.get_project_by_name(name)
+        self.ids.project_label.text = name
+        self.refresh_table()
+
     def on_pre_enter(self):
         if not DB.cur_proj:
             return
@@ -667,22 +686,8 @@ class ELAApp(App):
             nav.add_widget(btn)
         root.add_widget(nav)
 
-        sm.bind(current=self._update_top)
         sm.current = "projects"
-        self._update_top(sm, sm.current)
         return root
-
-    def _update_top(self, sm, cur):
-        if cur == "projects":
-            self.top_btn.text = "New Project"
-        elif cur == "new_project":
-            self.top_btn.text = "Back"
-        elif cur == "files":
-            self.top_btn.text = "New File"
-        elif cur == "new_file":
-            self.top_btn.text = "Back"
-        else:
-            self.top_btn.text = "Back"
 
     def go(self, screen_name):
         self.history.append(self.sm.current)
@@ -694,6 +699,11 @@ class ELAApp(App):
             self.sm.current = prev
         else:
             self.sm.current = "projects"
+
+    def open_new_file_screen(self):
+        if DB.cur_proj is None:
+            return
+        self.sm.current = "new_file"
 
 
 # ─────────────────────── KV-разметка ───────────────────────

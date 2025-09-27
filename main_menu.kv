@@ -1,334 +1,39 @@
-<Table>:
-    size_hint_y: 1
+#:kivy 2.2.0
+
+# ─────────────────────────────────────────────────────────
+# Reusable full-width Back button (top line on every screen)
+# ─────────────────────────────────────────────────────────
+<BackBar@Button>:
+    size_hint_y: None
+    height: 36
+    text: "Back"
+    on_release: app.go_back()
+
+# ─────────────────────────────────────────────────────────
+# Flat vocabulary row for export table (checkbox | Project | File | Items | Created)
+# ─────────────────────────────────────────────────────────
+<VocabFlatRow@BoxLayout>:
+    node_id: ""
+    project: ""
+    file: ""
+    count: 0
+    created: ""
+    checked: False
+    size_hint_y: None
+    height: 34
     canvas.before:
         Color:
-            rgba: 0, 0, 0, 1
+            rgba: 0.12,0.12,0.12,1
         Rectangle:
             pos: self.pos
             size: self.size
-
-<Projects>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        Label:
-            text: "Projects"
-            color: 1,1,0,1
-            font_size: "24sp"
-            size_hint_y: None
-            height: 40
-        Table:
-            id: tbl
-            headers: ["Name", "Created", "Updated", "Analyzed"]
-
-<NewProject>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 12
-        Label:
-            text: "New Project"
-            color: 1,1,0,1
-            font_size: "22sp"
-            size_hint_y: None
-            height: 30
-        TextInput:
-            id: name_input
-            hint_text: "Project name"
-            multiline: False
-            size_hint_y: None
-            height: 40
-        Button:
-            text: "Create"
-            size_hint_y: None
-            height: 44
-            on_release: root.create()
-
-<Files>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        Label:
-            id: project_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-        Table:
-            id: tbl
-            headers: ["Name", "Settings", "Updated", "Analyzed"]
-
-<NewFile>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        Label:
-            id: project_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-        GridLayout:
-            cols: 2
-            spacing: 8
-            padding: [10, 0]
-            size_hint_y: None
-            height: self.minimum_height
-            Label:
-                text: "Translator:"
-            Spinner:
-                id: translator
-                text: "GPT"
-                values: ["GPT", "HuggingFace", "DeepL", "Original"]
-                size_hint_y: None
-                height: 36
-            Label:
-                text: "Subtitles:"
-            Spinner:
-                id: subtitles
-                text: "Bilingual"
-                values: ["English", "Bilingual", "Ru subs"]
-                size_hint_y: None
-                height: 36
-            Label:
-                text: "Voice:"
-            Spinner:
-                id: voice
-                text: "Male"
-                values: ["Male", "Female"]
-                size_hint_y: None
-                height: 36
-            Label:
-                text: "File:"
-            Button:
-                text: root.selected_path
-                size_hint_y: None
-                height: 36
-                on_release: root.choose_file()
-        Label:
-            id: status
-            markup: True
-            size_hint_y: None
-            height: 24
-        Button:
-            text: "Create"
-            size_hint_y: None
-            height: 44
-            on_release: root.create()
-
-<AnalyzeList>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        padding: 10
-        Label:
-            text: "Analyze Files"
-            color: 1,1,0,1
-            font_size: "24sp"
-            size_hint_y: None
-            height: 40
-        Table:
-            id: tbl
-            headers: ["File", "Project", "Analyzed", "Updated"]
-
-<AnalyzeDetail>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        padding: 10
-        Label:
-            id: project_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-        Label:
-            id: file_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "18sp"
-            size_hint_y: None
-            height: 26
-        GridLayout:
-            cols: 2
-            spacing: 8
-            size_hint_y: None
-            height: self.minimum_height
-            Label:
-                text: "Translator:"
-            Spinner:
-                id: an_tr
-                text: "GPT"
-                values: ["GPT", "HuggingFace", "DeepL", "Original"]
-                size_hint_y: None
-                height: 36
-            Label:
-                text: "Subtitles:"
-            Spinner:
-                id: an_sub
-                text: "Bilingual"
-                values: ["English only", "Bilingual sequential", "Bilingual simultaneous", "English + Russian subs", "Bilingual audio + Russian subs"]
-                size_hint_y: None
-                height: 36
-            Label:
-                text: "Voice:"
-            Spinner:
-                id: an_voice
-                text: "Male"
-                values: ["Male", "Female"]
-                size_hint_y: None
-                height: 36
-        Label:
-            id: status
-            text: ""
-            markup: True
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-        Workspace:
-            id: ws
-            size_hint_y: None
-            height: 120
-        Button:
-            text: "Start pipeline"
-            size_hint_y: None
-            height: 44
-            on_release: root.start()
-
-<Vocabulary>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        padding: 10
-
-        BoxLayout:
-            size_hint_y: None
-            height: 44
-            Label:
-                text: "Vocabulary"
-                color: 1,1,0,1
-                font_size: "22sp"
-            BoxLayout:
-                size_hint_x: None
-                width: 420
-                spacing: 8
-                Button:
-                    text: "Quiz"
-                    on_release: root.open_quiz()
-                Button:
-                    text: "Export JSON"
-                    on_release: root.on_export_json()
-                Button:
-                    text: "Export CSV"
-                    on_release: root.on_export_csv()
-
-        # Header
-        BoxLayout:
-            size_hint_y: None
-            height: 34
-            canvas.before:
-                Color:
-                    rgba: 0.20,0.20,0.20,1
-                Rectangle:
-                    pos: self.pos
-                    size: self.size
-                Color:
-                    rgba: 0.35,0.35,0.35,1
-                Line:
-                    rectangle: (self.x, self.y, self.width, self.height)
-
-            BoxLayout:
-                size_hint_x: None
-                width: 40
-                canvas.before:
-                    Color:
-                        rgba: 0.35,0.35,0.35,1
-                    Line:
-                        rectangle: (self.x, self.y, self.width, self.height)
-                CheckBox:
-                    id: app_cb
-                    size_hint: None, None
-                    size: 22, 22
-                    pos_hint: {"center_y": .5}
-                    on_active: root.header_toggle(self.active)
-
-            Label:
-                text: "Project"
-                size_hint_x: None
-                width: 220
-                bold: True
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-                canvas.before:
-                    Color:
-                        rgba: 0.35,0.35,0.35,1
-                    Line:
-                        rectangle: (self.x, self.y, self.width, self.height)
-
-            Label:
-                text: "File"
-                bold: True
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-                canvas.before:
-                    Color:
-                        rgba: 0.35,0.35,0.35,1
-                    Line:
-                        rectangle: (self.x, self.y, self.width, self.height)
-
-            Label:
-                text: "Items"
-                size_hint_x: None
-                width: 90
-                bold: True
-                halign: "right"
-                valign: "middle"
-                text_size: self.size
-                canvas.before:
-                    Color:
-                        rgba: 0.35,0.35,0.35,1
-                    Line:
-                        rectangle: (self.x, self.y, self.width, self.height)
-
-            Label:
-                text: "Created"
-                size_hint_x: None
-                width: 130
-                bold: True
-                halign: "right"
-                valign: "middle"
-                text_size: self.size
-                canvas.before:
-                    Color:
-                        rgba: 0.35,0.35,0.35,1
-                    Line:
-                        rectangle: (self.x, self.y, self.width, self.height)
-
-        # Body
-        ScrollView:
-            do_scroll_x: False
-            GridLayout:
-                id: vocab_rows
-                cols: 1
-                size_hint_y: None
-                height: self.minimum_height
-                spacing: 0
-
-<VocabFlatRow>:
-    size_hint_y: None
-    height: 34
     BoxLayout:
         orientation: "horizontal"
         size_hint_y: None
         height: 34
         spacing: 0
 
-        # checkbox
+        # checkbox (row)
         BoxLayout:
             size_hint_x: None
             width: 40
@@ -403,35 +108,324 @@
                 Line:
                     rectangle: (self.x, self.y, self.width, self.height)
 
-<VocabExportModal>:
-    size_hint: 0.94, 0.9
-    auto_dismiss: False
+# ─────────────────────────────────────────────────────────
+# PROJECTS LIST
+# ─────────────────────────────────────────────────────────
+<Projects>:
     BoxLayout:
         orientation: "vertical"
-        spacing: 8
-        padding: 10
+        spacing: 10
 
-        # Header strip
+        # Title (left) + actions (right)
         BoxLayout:
             size_hint_y: None
-            height: 38
+            height: 44
             Label:
-                text: "Export vocabulary"
+                text: "Projects"
                 color: 1,1,0,1
-                font_size: "18sp"
+                font_size: "24sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
             BoxLayout:
                 size_hint_x: None
-                width: 360
+                width: 180
                 spacing: 8
                 Button:
-                    text: "Select all"
-                    on_release: root.select_all(True)
+                    text: "New Project"
+                    on_release: app.go("new_project")
+
+        Table:
+            id: tbl
+            headers: ["Name", "Created", "Updated", "Analyzed"]
+
+# ─────────────────────────────────────────────────────────
+# PROJECT FILES
+# ─────────────────────────────────────────────────────────
+<Files>:
+    # expects: .project_name set from python
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+
+        BoxLayout:
+            size_hint_y: None
+            height: 44
+            Label:
+                id: project_label
+                text: root.project_name if hasattr(root, "project_name") else ""
+                color: 1,1,0,1
+                font_size: "20sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            BoxLayout:
+                size_hint_x: None
+                width: 160
+                spacing: 8
                 Button:
-                    text: "Clear"
-                    on_release: root.select_all(False)
+                    text: "New File"
+                    on_release: app.open_new_file_screen()
+
+        Table:
+            id: tbl
+            headers: ["Name", "Settings", "Updated", "Analyzed"]
+
+# ─────────────────────────────────────────────────────────
+# NEW PROJECT
+# ─────────────────────────────────────────────────────────
+<NewProject>:
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 12
+        padding: 10
+
+        BoxLayout:
+            size_hint_y: None
+            height: 44
+            Label:
+                text: "New Project"
+                color: 1,1,0,1
+                font_size: "22sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            BoxLayout:
+                size_hint_x: None
+                width: 1
+
+        TextInput:
+            id: name_input
+            hint_text: "Project name"
+            multiline: False
+            size_hint_y: None
+            height: 40
+        Button:
+            text: "Create"
+            size_hint_y: None
+            height: 44
+            on_release: root.create()
+
+# ─────────────────────────────────────────────────────────
+# NEW FILE
+# ─────────────────────────────────────────────────────────
+<NewFile>:
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        padding: 10
+
+        BoxLayout:
+            size_hint_y: None
+            height: 44
+            Label:
+                id: project_label
+                text: ""
+                color: 1,1,0,1
+                font_size: "20sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            BoxLayout:
+                size_hint_x: None
+                width: 1
+
+        GridLayout:
+            cols: 2
+            spacing: 8
+            padding: [10, 0]
+            size_hint_y: None
+            height: self.minimum_height
+
+            Label:
+                text: "Translator:"
+            Spinner:
+                id: translator
+                text: "GPT"
+                values: ["GPT", "HuggingFace", "DeepL", "Original"]
+                size_hint_y: None
+                height: 36
+
+            Label:
+                text: "Subtitles:"
+            Spinner:
+                id: subtitles
+                text: "Bilingual"
+                values: ["English", "Bilingual", "Ru subs"]
+                size_hint_y: None
+                height: 36
+
+            Label:
+                text: "Voice:"
+            Spinner:
+                id: voice
+                text: "Male"
+                values: ["Male", "Female"]
+                size_hint_y: None
+                height: 36
+
+            Label:
+                text: "File:"
+            Button:
+                text: root.selected_path
+                size_hint_y: None
+                height: 36
+                on_release: root.choose_file()
+
+        Label:
+            id: status
+            markup: True
+            size_hint_y: None
+            height: 24
+        Button:
+            text: "Create"
+            size_hint_y: None
+            height: 44
+            on_release: root.create()
+
+# ─────────────────────────────────────────────────────────
+# ANALYZE LIST
+# ─────────────────────────────────────────────────────────
+<AnalyzeList>:
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        padding: 10
+
+        BoxLayout:
+            size_hint_y: None
+            height: 44
+            Label:
+                text: "Analyze Files"
+                color: 1,1,0,1
+                font_size: "24sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            BoxLayout:
+                size_hint_x: None
+                width: 1
+
+        Table:
+            id: tbl
+            headers: ["File", "Project", "Analyzed", "Updated"]
+
+# ─────────────────────────────────────────────────────────
+# ANALYZE DETAIL
+# ─────────────────────────────────────────────────────────
+<AnalyzeDetail>:
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        padding: 10
+
+        BoxLayout:
+            size_hint_y: None
+            height: 44
+            Label:
+                id: project_label
+                text: ""
+                color: 1,1,0,1
+                font_size: "20sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            BoxLayout:
+                size_hint_x: None
+                width: 1
+
+        Label:
+            id: file_label
+            text: ""
+            color: 1,1,0,1
+            font_size: "18sp"
+            size_hint_y: None
+            height: 26
+
+        GridLayout:
+            cols: 2
+            spacing: 8
+            size_hint_y: None
+            height: self.minimum_height
+
+            Label:
+                text: "Translator:"
+            Spinner:
+                id: an_tr
+                text: "GPT"
+                values: ["GPT", "HuggingFace", "DeepL", "Original"]
+                size_hint_y: None
+                height: 36
+
+            Label:
+                text: "Subtitles:"
+            Spinner:
+                id: an_sub
+                text: "Bilingual"
+                values: ["English only", "Bilingual sequential", "Bilingual simultaneous", "English + Russian subs", "Bilingual audio + Russian subs"]
+                size_hint_y: None
+                height: 36
+
+            Label:
+                text: "Voice:"
+            Spinner:
+                id: an_voice
+                text: "Male"
+                values: ["Male", "Female"]
+                size_hint_y: None
+                height: 36
+
+        Label:
+            id: status
+            text: ""
+            markup: True
+            color: 1,1,0,1
+            font_size: "20sp"
+            size_hint_y: None
+            height: 30
+        Workspace:
+            id: ws
+            size_hint_y: None
+            height: 120
+        Button:
+            text: "Start pipeline"
+            size_hint_y: None
+            height: 44
+            on_release: root.start()
+
+# ─────────────────────────────────────────────────────────
+# VOCABULARY (export on main screen)
+# ─────────────────────────────────────────────────────────
+<Vocabulary>:
+    BoxLayout:
+        orientation: "vertical"
+        spacing: 10
+        padding: 10
+
+        # Title + actions
+        BoxLayout:
+            size_hint_y: None
+            height: 44
+            Label:
+                text: "Vocabulary"
+                color: 1,1,0,1
+                font_size: "22sp"
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            BoxLayout:
+                size_hint_x: None
+                width: 420
+                spacing: 8
                 Button:
-                    text: "Close"
-                    on_release: root.dismiss()
+                    text: "Quiz"
+                    on_release: root.open_quiz()
+                Button:
+                    text: "Export JSON"
+                    on_release: root.on_export_json()
+                Button:
+                    text: "Export CSV"
+                    on_release: root.on_export_csv()
 
         # Table header
         BoxLayout:
@@ -447,9 +441,9 @@
                     rgba: 0.35,0.35,0.35,1
                 Line:
                     rectangle: (self.x, self.y, self.width, self.height)
-            # checkbox col
-            Label:
-                text: ""
+
+            # header checkbox (select all)
+            BoxLayout:
                 size_hint_x: None
                 width: 40
                 canvas.before:
@@ -457,23 +451,17 @@
                         rgba: 0.35,0.35,0.35,1
                     Line:
                         rectangle: (self.x, self.y, self.width, self.height)
-            Label:
-                text: "Level"
-                size_hint_x: None
-                width: 110
-                bold: True
-                halign: "left"
-                valign: "middle"
-                text_size: self.size
-                canvas.before:
-                    Color:
-                        rgba: 0.35,0.35,0.35,1
-                    Line:
-                        rectangle: (self.x, self.y, self.width, self.height)
+                CheckBox:
+                    id: app_cb
+                    size_hint: None, None
+                    size: 22, 22
+                    pos_hint: {"center_y": .5}
+                    on_active: root.header_toggle(self.active)
+
             Label:
                 text: "Project"
                 size_hint_x: None
-                width: 200
+                width: 220
                 bold: True
                 halign: "left"
                 valign: "middle"
@@ -483,6 +471,7 @@
                         rgba: 0.35,0.35,0.35,1
                     Line:
                         rectangle: (self.x, self.y, self.width, self.height)
+
             Label:
                 text: "File"
                 bold: True
@@ -494,6 +483,7 @@
                         rgba: 0.35,0.35,0.35,1
                     Line:
                         rectangle: (self.x, self.y, self.width, self.height)
+
             Label:
                 text: "Items"
                 size_hint_x: None
@@ -507,6 +497,7 @@
                         rgba: 0.35,0.35,0.35,1
                     Line:
                         rectangle: (self.x, self.y, self.width, self.height)
+
             Label:
                 text: "Created"
                 size_hint_x: None
@@ -525,73 +516,8 @@
         ScrollView:
             do_scroll_x: False
             GridLayout:
-                id: rows
+                id: vocab_rows
                 cols: 1
                 size_hint_y: None
                 height: self.minimum_height
                 spacing: 0
-
-        # Footer
-        BoxLayout:
-            size_hint_y: None
-            height: 46
-            spacing: 8
-            Widget:
-            Button:
-                text: "Export JSON"
-                on_release: root.on_export_json()
-            Button:
-                text: "Export CSV"
-                on_release: root.on_export_csv()
-
-<QuizModal>:
-    size_hint: 0.5, 0.6
-    auto_dismiss: False
-    BoxLayout:
-        orientation: "vertical"
-        padding: 12
-        spacing: 10
-        Label:
-            text: "Start quiz"
-            color: 1,1,0,1
-            font_size: "18sp"
-            size_hint_y: None
-            height: 28
-        Label:
-            text: "Mode"
-            size_hint_y: None
-            height: 20
-        BoxLayout:
-            size_hint_y: None
-            height: 36
-            ToggleButton:
-                id: q_flash
-                text: "Flashcards"
-                group: "qmode"
-                state: "down"
-            ToggleButton:
-                id: q_mc
-                text: "Multiple-choice"
-                group: "qmode"
-        Label:
-            text: "Questions"
-            size_hint_y: None
-            height: 20
-        TextInput:
-            id: q_count
-            text: "20"
-            input_filter: "int"
-            multiline: False
-            size_hint_y: None
-            height: 36
-        Widget:
-        BoxLayout:
-            size_hint_y: None
-            height: 44
-            spacing: 8
-            Button:
-                text: "Cancel"
-                on_release: root.dismiss()
-            Button:
-                text: "Start"
-                on_release: root.on_start_pressed()
