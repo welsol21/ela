@@ -1,6 +1,9 @@
 # main_menu_app.py
 import os
+import json
+from platform import node
 import time
+import random
 import threading
 import datetime as dt
 from functools import partial
@@ -8,7 +11,7 @@ from functools import partial
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import ListProperty, ObjectProperty, BooleanProperty, StringProperty
+from kivy.properties import ListProperty, ObjectProperty, BooleanProperty, StringProperty, NumericProperty, DictProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.gridlayout import GridLayout
@@ -21,247 +24,55 @@ from kivy.uix.modalview import ModalView
 from kivy.uix.filechooser import FileChooserIconView
 from kivy.uix.progressbar import ProgressBar
 from kivy.uix.screenmanager import Screen, ScreenManager, SlideTransition
+from kivy.uix.checkbox import CheckBox
+from kivy.uix.togglebutton import ToggleButton
+from kivy.lang import Builder
 
-# ─────────────────────── KV-разметка ───────────────────────
-Builder.load_string(r"""
-<Table>:
-    size_hint_y: 1
-    canvas.before:
-        Color:
-            rgba: 0, 0, 0, 1
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
-<Projects>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        Label:
-            text: "Projects"
-            color: 1,1,0,1
-            font_size: "24sp"
-            size_hint_y: None
-            height: 40
-        Table:
-            id: tbl
-            headers: ["Name", "Created", "Updated", "Analyzed"]
-
-<NewProject>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 12
-        Label:
-            text: "New Project"
-            color: 1,1,0,1
-            font_size: "22sp"
-            size_hint_y: None
-            height: 30
-        TextInput:
-            id: name_input
-            hint_text: "Project name"
-            multiline: False
-            size_hint_y: None
-            height: 40
-        Button:
-            text: "Create"
-            size_hint_y: None
-            height: 44
-            on_release: root.create()
-
-<Files>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        Label:
-            id: project_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-        Table:
-            id: tbl
-            headers: ["Name", "Settings", "Updated", "Analyzed"]
-
-<NewFile>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-
-        Label:
-            id: project_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-
-        GridLayout:
-            cols: 2
-            spacing: 8
-            padding: [10, 0]
-            size_hint_y: None
-            height: self.minimum_height
-
-            Label:
-                text: "Translator:"
-            Spinner:
-                id: translator
-                text: "GPT"
-                values: ["GPT", "HuggingFace", "DeepL", "Original"]
-                size_hint_y: None
-                height: 36
-
-            Label:
-                text: "Subtitles:"
-            Spinner:
-                id: subtitles
-                text: "Bilingual"
-                values: ["English", "Bilingual", "Ru subs"]
-                size_hint_y: None
-                height: 36
-
-            Label:
-                text: "Voice:"
-            Spinner:
-                id: voice
-                text: "Male"
-                values: ["Male", "Female"]
-                size_hint_y: None
-                height: 36
-
-            Label:
-                text: "File:"
-            Button:
-                text: root.selected_path
-                size_hint_y: None
-                height: 36
-                on_release: root.choose_file()
-
-        Label:
-            id: status
-            markup: True
-            size_hint_y: None
-            height: 24
-
-        Button:
-            text: "Create"
-            size_hint_y: None
-            height: 44
-            on_release: root.create()
-
-# ─── Новый экран списка файлов для Analyze ───
-<AnalyzeList>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        padding: 10
-
-        Label:
-            text: "Analyze Files"
-            color: 1,1,0,1
-            font_size: "24sp"
-            size_hint_y: None
-            height: 40
-
-        Table:
-            id: tbl
-            headers: ["File", "Project", "Analyzed", "Updated"]
-
-# ─── Экран детализации анализа ───
-<AnalyzeDetail>:
-    BoxLayout:
-        orientation: "vertical"
-        spacing: 10
-        padding: 10
-
-        # Проект и файл
-        Label:
-            id: project_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-
-        Label:
-            id: file_label
-            text: ""
-            color: 1,1,0,1
-            font_size: "18sp"
-            size_hint_y: None
-            height: 26
-
-        # Настройки (спиннеры)
-        GridLayout:
-            cols: 2
-            spacing: 8
-            size_hint_y: None
-            height: self.minimum_height
-
-            Label:
-                text: "Translator:"
-            Spinner:
-                id: an_tr
-                text: "GPT"
-                values: ["GPT", "HuggingFace", "DeepL", "Original"]
-                size_hint_y: None
-                height: 36
-
-            Label:
-                text: "Subtitles:"
-            Spinner:
-                id: an_sub
-                text: "Bilingual"
-                values: ["English only", "Bilingual sequential", "Bilingual simultaneous", "English + Russian subs", "Bilingual audio + Russian subs"]
-                size_hint_y: None
-                height: 36
-
-            Label:
-                text: "Voice:"
-            Spinner:
-                id: an_voice
-                text: "Male"
-                values: ["Male", "Female"]
-                size_hint_y: None
-                height: 36
-
-        # Статус и прогресс-бары
-        Label:
-            id: status
-            text: ""
-            markup: True
-            color: 1,1,0,1
-            font_size: "20sp"
-            size_hint_y: None
-            height: 30
-
-        Workspace:
-            id: ws
-            size_hint_y: None
-            height: 120
-
-        Button:
-            text: "Start pipeline"
-            size_hint_y: None
-            height: 44
-            on_release: root.start()
-
-<Vocabulary>:
-    AnchorLayout:
-        Label:
-            text: "Vocabulary (TBD)"
-            color: 1,1,0,1
-            font_size: "22sp"
-""")
 
 # ─────────── DataStore и fake-пайплайн ───────────
+
+
+class VocabTreeNode(BoxLayout):
+    node_id = StringProperty("")
+    label = StringProperty("")
+    created = StringProperty("")
+    count = NumericProperty(0)
+    level = NumericProperty(0)
+    checked = BooleanProperty(False)
+    is_group = BooleanProperty(False)          # <-- важно
+    lead_width = NumericProperty(56)
+    children = ListProperty([])                # дочерние VocabTreeNode
+    parent_ref = ObjectProperty(allownone=True)
+
+    def on_kv_post(self, base_widget):
+        # безопасная привязка события чекбокса после применения KV
+        if hasattr(self.ids, "cb"):
+            self.ids.cb.bind(active=self._on_cb_active)
+
+    def _on_cb_active(self, instance, value: bool):
+        self.on_toggle(value)
+
+    def on_toggle(self, new_state: bool):
+        # каскад вниз
+        for ch in self.children:
+            ch.ids.cb.active = new_state
+        # пересчёт вверх
+        self._bubble_parent()
+
+    def _bubble_parent(self):
+        p = self.parent_ref
+        if not p:
+            return
+        states = [c.ids.cb.active for c in p.children]
+        p.ids.cb.active = all(states)
+        p._bubble_parent()
+
 
 class DB:
     projects: list[dict] = []
     cur_proj: dict | None = None
     cur_file: dict | None = None
+    app_created: str = dt.date.today().strftime("%b %d, %Y")
 
     @staticmethod
     def today():
@@ -278,8 +89,80 @@ class DB:
 
     @classmethod
     def add_file(cls, proj, data):
-        proj["files"].append({**data, "updated": cls.today(), "analyzed": False})
+        # прототип: создаём метаданные файла, включая lex_items
+        lex_items = 20 + (len(data["name"]) * 3) % 60  # стабильная псевдометрическая величина
+        proj["files"].append({
+            **data,
+            "created": cls.today(),
+            "updated": cls.today(),
+            "analyzed": False,
+            "lex_items": lex_items
+        })
         proj["updated"] = cls.today()
+
+    # ─── агрегаты лексики ───
+    @classmethod
+    def count_project_lex(cls, proj: dict) -> int:
+        return sum(f.get("lex_items", 0) for f in proj["files"])
+
+    @classmethod
+    def count_app_lex(cls) -> int:
+        return sum(cls.count_project_lex(p) for p in cls.projects)
+
+    # ─── дерево словарей для экспорта ───
+    @classmethod
+    def build_vocab_tree(cls):
+        root = {
+            "id": "app",
+            "label": "Application",
+            "type": "app",
+            "created": cls.app_created,
+            "count": cls.count_app_lex(),
+            "children": []
+        }
+        for i, p in enumerate(cls.projects):
+            pnode = {
+                "id": f"proj:{i}",
+                "label": p["name"],
+                "type": "project",
+                "created": p["created"],
+                "count": cls.count_project_lex(p),
+                "children": []
+            }
+            for j, f in enumerate(p["files"]):
+                fnode = {
+                    "id": f"file:{i}:{j}",
+                    "label": f["name"],
+                    "type": "file",
+                    "created": f["created"],
+                    "count": f.get("lex_items", 0),
+                    "children": []
+                }
+                pnode["children"].append(fnode)
+            root["children"].append(pnode)
+        return root
+
+    # ─── получение «лексических элементов» для выбранных контейнеров (прототип) ───
+    @classmethod
+    def collect_entries(cls, ids: list[str]):
+        """Возвращает список слов/фраз для выбранных узлов (без дублей внутри файла).
+        В прототипе генерируем фиктивные элементы на основе имени файла."""
+        entries = []
+        def file_entries(fname: str, n: int):
+            # стабильный набор «элементов» из имени файла
+            base = os.path.splitext(fname)[0].replace(" ", "_").lower() or "file"
+            return [f"{base}_token_{k+1}" for k in range(n)]
+
+        include_all = "app" in ids
+        for pi, p in enumerate(cls.projects):
+            pid = f"proj:{pi}"
+            proj_selected = include_all or (pid in ids)
+            for fi, f in enumerate(p["files"]):
+                fid = f"file:{pi}:{fi}"
+                if include_all or proj_selected or (fid in ids):
+                    entries.extend(file_entries(f["name"], f.get("lex_items", 0)))
+        # можно ещё дедуплицировать глобально, но в прототипе оставим как есть
+        return entries
 
 def dummy_process(path, ui_cb):
     for name in ["loading","transcribing","translating","generating","exporting"]:
@@ -335,7 +218,8 @@ class Table(BoxLayout):
         self.add_widget(sv)
 
     def clear(self):
-        self.body.clear_widgets()
+        if self.body:
+            self.body.clear_widgets()
 
     def add_row(self, values, press=None):
         row = _Row(cols=len(self.headers),
@@ -346,11 +230,8 @@ class Table(BoxLayout):
             row.bind(on_release=press)
         self.body.add_widget(row)
 
-
 class Workspace(BoxLayout):
-    # новые идентификаторы шагов
     steps = ["loading", "transcribing", "translating", "generating", "exporting"]
-    # человекочитаемые названия
     titles = {
         "loading":       "Loading file",
         "transcribing":  "Transcribing audio",
@@ -366,10 +247,10 @@ class Workspace(BoxLayout):
             bar = ProgressBar(max=100, height=18)
             lbl = Label(
                 text=self.titles[step],
-                size_hint_x=None, width=140,  # расширил под более длинный текст
+                size_hint_x=None, width=140,
                 font_size=12, valign="middle", halign="left"
             )
-            lbl.bind(size=lbl.setter('text_size'))  # для корректного выравнивания
+            lbl.bind(size=lbl.setter('text_size'))
             row = BoxLayout(size_hint_y=None, height=18)
             row.add_widget(lbl)
             row.add_widget(bar)
@@ -377,7 +258,6 @@ class Workspace(BoxLayout):
             self.bars[step] = bar
 
     def set(self, step, val):
-        # устанавливаем прогресс для указанного шага
         if step in self.bars:
             self.bars[step].value = val
 
@@ -414,6 +294,10 @@ class Files(Screen):
             return
         self.ids.project_label.text = DB.cur_proj["name"]
         tbl = self.ids.tbl; tbl.clear()
+        # remove stray call "files()"
+        # no-op guard removed
+
+        tbl.clear()
         for f in DB.cur_proj["files"]:
             tbl.add_row(
                 [f["name"],
@@ -438,7 +322,11 @@ class NewFile(Screen):
     def choose_file(self):
         fc = FileChooserIconView(filters=["*.mp3","*.wav","*.txt","*.pdf"])
         mv = ModalView(size_hint=(0.9, 0.9))
-        fc.bind(on_submit=lambda inst, sel, *_: (setattr(self, 'selected_path', os.path.basename(sel[0])) if sel else None, mv.dismiss()))
+        def on_submit(inst, sel, *_):
+            if sel:
+                self.selected_path = os.path.basename(sel[0])
+            mv.dismiss()
+        fc.bind(on_submit=on_submit)
         mv.add_widget(fc); mv.open()
 
     def create(self):
@@ -498,8 +386,254 @@ class AnalyzeDetail(Screen):
             Clock.schedule_once(lambda *_: setattr(self.ids.status, "text", "[color=33ff33]Done[/color]"), 0)
         threading.Thread(target=run_proc, daemon=True).start()
 
+
+# ─── Vocabulary: главный экран ───
 class Vocabulary(Screen):
-    pass
+    def on_pre_enter(self, *args):
+        self._build_flat_table()
+        # сбросить чекбокс шапки при входе
+        if "app_cb" in self.ids:
+            self.ids.app_cb.active = False
+
+    # ---------- helpers ----------
+    def _is_analyzed(self, project_label: str, file_label: str) -> bool:
+        fname = file_label  # сюда уже придёт чистое имя без суффикса
+        for p in DB.projects:
+            if p.get("name") == project_label:
+                for f in p.get("files", []):
+                    if f.get("name") == fname:
+                        return bool(f.get("analyzed", False))
+        return False
+
+    def _build_flat_table(self):
+        rows = []
+        for p in DB.projects:
+            proj = p.get("name", "")
+            for f in p.get("files", []):
+                if not f.get("analyzed", False):
+                    continue
+                rows.append({
+                    "id": f"file:{proj}:{f['name']}",
+                    "project": proj,
+                    "file": f["name"],
+                    # ← БЕРЁМ lex_items (так у тебя хранится количество лексем)
+                    "count": int(f.get("lex_items", 0)),
+                    "created": f.get("created", p.get("created", "")) or ""
+                })
+
+        cont = self.ids.vocab_rows
+        cont.clear_widgets()
+        for r in rows:
+            cont.add_widget(VocabFlatRow(
+                node_id=r["id"],
+                project=r["project"],
+                file=r["file"],
+                count=r["count"],
+                created=r["created"],
+                checked=False
+            ))
+        self._flat_cache = rows
+
+    # ---------- header checkbox ----------
+    def header_toggle(self, value: bool):
+        """Клик по чекбоксу в шапке — отметить/снять все строки."""
+        for w in self.ids.vocab_rows.children:
+            if isinstance(w, VocabFlatRow):
+                w.ids.cb.active = value
+
+    # ---------- export helpers ----------
+    def _gather_checked_ids(self) -> list[str]:
+        ids = []
+        for w in self.ids.vocab_rows.children:
+            if isinstance(w, VocabFlatRow) and w.ids.cb.active:
+                ids.append(w.node_id)
+        return ids
+
+    def on_export_json(self):
+        ids = self._gather_checked_ids()
+        if not ids:
+            return
+        ext, text = self._make_payload(ids, "json")
+        self._save_dialog(text, ext)
+
+    def on_export_csv(self):
+        ids = self._gather_checked_ids()
+        if not ids:
+            return
+        ext, text = self._make_payload(ids, "csv")
+        self._save_dialog(text, ext)
+
+
+# --- ADD: flat row widget class ---
+class VocabFlatRow(BoxLayout):
+    node_id = StringProperty("")
+    project = StringProperty("")
+    file = StringProperty("")
+    count = NumericProperty(0)
+    created = StringProperty("")
+    checked = BooleanProperty(False)
+
+    def on_kv_post(self, base_widget):
+        if hasattr(self.ids, "cb"):
+            self.ids.cb.bind(active=lambda inst, val: setattr(self, "checked", val))
+
+
+# ─────────── Модалка экспорта ───────────
+class VocabExportModal(ModalView):
+    # -------------------- helpers --------------------
+    def _is_analyzed(self, project_label: str, file_label: str) -> bool:
+        """file_label приходит как 'File 1.mp3 (file)' — убираем суффикс."""
+        fname = file_label.rsplit(" (", 1)[0]
+        for p in DB.projects:
+            if p.get("name") == project_label:
+                for f in p.get("files", []):
+                    if f.get("name") == fname:
+                        return bool(f.get("analyzed", False))
+        return False
+
+    # -------------------- UI build (FLAT) --------------------
+    def on_open(self):
+        """Строим плоскую таблицу: только analyzed-файлы,
+        суммы на уровнях Project и App считаются по ним же."""
+        tree = DB.build_vocab_tree()  # {type,id,label,count,created,children}
+        flat_rows = self._flatten_only_analyzed(tree)
+
+        cont = self.ids.rows
+        cont.clear_widgets()
+        for r in flat_rows:
+            cont.add_widget(VocabFlatRow(
+                node_id=r["id"],
+                level=r["level"],
+                project=r["project"],
+                file=r["file"],
+                count=r["count"],
+                created=r["created"],
+                checked=False
+            ))
+        self._flat_cache = flat_rows
+
+    def _flatten_only_analyzed(self, root: dict) -> list[dict]:
+        """Возвращает плоский список строк:
+        [App-row?, Project-row+, File-row (только analyzed)]."""
+        out: list[dict] = []
+
+        if root.get("type") != "app":
+            return out
+
+        app_total = 0
+        app_created = root.get("created", "")
+        app_id = root.get("id", "app")
+
+        # проекты
+        for pr in root.get("children", []):
+            if pr.get("type") != "project":
+                continue
+
+            proj_label = pr.get("label", "")
+            proj_id = pr.get("id", "")
+            proj_created = pr.get("created", "")
+
+            # собрать только analyzed-файлы
+            file_rows = []
+            proj_total = 0
+            for ch in pr.get("children", []):
+                if ch.get("type") != "file":
+                    continue
+                file_label = ch.get("label", "")
+                if not self._is_analyzed(proj_label, file_label):
+                    continue
+                file_rows.append({
+                    "id": ch.get("id", ""),
+                    "level": "File",
+                    "project": proj_label,
+                    "file": file_label,
+                    "count": int(ch.get("count", 0)),
+                    "created": ch.get("created", "")
+                })
+                proj_total += int(ch.get("count", 0))
+
+            # если в проекте нет analyzed-файлов — проект не добавляем
+            if proj_total == 0:
+                continue
+
+            # строка проекта (сумма только по analyzed)
+            out.append({
+                "id": proj_id,
+                "level": "Project",
+                "project": proj_label,
+                "file": "",
+                "count": proj_total,
+                "created": proj_created
+            })
+            # строки файлов проекта
+            out.extend(file_rows)
+
+            app_total += proj_total
+
+        # строка приложения — только если есть что экспортировать
+        if app_total > 0:
+            out.insert(0, {
+                "id": app_id,
+                "level": "App",
+                "project": "",
+                "file": "Application",
+                "count": app_total,
+                "created": app_created
+            })
+
+        return out
+
+    # -------------------- select / export (как было) --------------------
+    def select_all(self, value: bool):
+        for w in self.ids.rows.children:
+            if isinstance(w, VocabFlatRow):
+                w.ids.cb.active = value
+
+    def _gather_checked_ids(self):
+        ids = []
+        for w in self.ids.rows.children:
+            if isinstance(w, VocabFlatRow) and w.ids.cb.active:
+                ids.append(w.node_id)
+        return ids
+
+    def on_export_json(self):
+        ids = self._gather_checked_ids()
+        if not ids:
+            return
+        ext, text = self._make_payload(ids, "json")
+        self._save_dialog(text, ext)
+
+    def on_export_csv(self):
+        ids = self._gather_checked_ids()
+        if not ids:
+            return
+        ext, text = self._make_payload(ids, "csv")
+        self._save_dialog(text, ext)
+
+
+# ─────────── Модалка викторины ───────────
+class QuizModal(ModalView):
+    def on_start_pressed(self):
+        mode = "multiple-choice" if self.ids.q_mc.state == "down" else "flashcards"
+        txt = self.ids.q_count.text.strip()
+        try:
+            limit = max(1, int(txt))
+        except Exception:
+            limit = 10
+        self.start_quiz(mode, limit)
+
+    def start_quiz(self, mode: str, limit: int):
+        entries = DB.collect_entries(["app"])
+        n = min(limit, len(entries))
+        info = ModalView(size_hint=(0.5, 0.3), auto_dismiss=True)
+        box = BoxLayout(orientation="vertical", padding=10, spacing=8)
+        box.add_widget(Label(text=f"Session started: {mode}\nQuestions: {n}"))
+        btn = Button(text="OK", size_hint_y=None, height=40)
+        btn.bind(on_release=lambda *_: info.dismiss())
+        box.add_widget(btn)
+        info.add_widget(box); info.open()
+        self.dismiss()
+
 
 # ───────────── Запуск приложения ─────────────
 class ELAApp(App):
@@ -561,18 +695,40 @@ class ELAApp(App):
         else:
             self.sm.current = "projects"
 
+
+# ─────────────────────── KV-разметка ───────────────────────
+Builder.load_file("main_menu.kv")
+
+
 if __name__ == "__main__":
+    # Project A — два файла
     DB.add_project("Project A")
     DB.add_file(DB.projects[0], {
         "name": "File 1.mp3", "translator": "GPT",
         "subtitles": "Bilingual", "voice": "Male",
         "path": "/fake/path/file1.mp3"
     })
-    # добавляем второй файл и помечаем его проанализированным
     DB.add_file(DB.projects[0], {
         "name": "File 2.mp3", "translator": "GPT",
         "subtitles": "Bilingual", "voice": "Male",
         "path": "/fake/path/file2.mp3"
     })
+    # Один из файлов пометим как обработанный, чтобы Projects показывал 1/2
     DB.projects[0]["files"][-1]["analyzed"] = True
+
+    # Project B — два файла
+    DB.add_project("Project B")
+    DB.add_file(DB.projects[1], {
+        "name": "Lecture.txt", "translator": "GPT",
+        "subtitles": "English", "voice": "Male",
+        "path": "/fake/path/lecture.txt"
+    })
+    DB.add_file(DB.projects[1], {
+        "name": "Notes.pdf", "translator": "GPT",
+        "subtitles": "English", "voice": "Female",
+        "path": "/fake/path/notes.pdf"
+    })
+    DB.projects[1]["files"][0]["analyzed"] = True   # Lecture.txt → analyzed
+
     ELAApp().run()
+
