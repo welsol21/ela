@@ -33,43 +33,6 @@ from kivy.properties import DictProperty
 
 # ─────────── DataStore и fake-пайплайн ───────────
 
-
-class VocabTreeNode(BoxLayout):
-    node_id = StringProperty("")
-    label = StringProperty("")
-    created = StringProperty("")
-    count = NumericProperty(0)
-    level = NumericProperty(0)
-    checked = BooleanProperty(False)
-    is_group = BooleanProperty(False)          # <-- важно
-    lead_width = NumericProperty(56)
-    children = ListProperty([])                # дочерние VocabTreeNode
-    parent_ref = ObjectProperty(allownone=True)
-
-    def on_kv_post(self, base_widget):
-        # безопасная привязка события чекбокса после применения KV
-        if hasattr(self.ids, "cb"):
-            self.ids.cb.bind(active=self._on_cb_active)
-
-    def _on_cb_active(self, instance, value: bool):
-        self.on_toggle(value)
-
-    def on_toggle(self, new_state: bool):
-        # каскад вниз
-        for ch in self.children:
-            ch.ids.cb.active = new_state
-        # пересчёт вверх
-        self._bubble_parent()
-
-    def _bubble_parent(self):
-        p = self.parent_ref
-        if not p:
-            return
-        states = [c.ids.cb.active for c in p.children]
-        p.ids.cb.active = all(states)
-        p._bubble_parent()
-
-
 class DB:
     projects: list[dict] = []
     cur_proj: dict | None = None
@@ -301,13 +264,6 @@ class Files(Screen):
     project_name = StringProperty("")
     project_ref = DictProperty({})
 
-    def set_project(self, name: str):
-        """Вызывается при входе в экран проекта."""
-        self.project_name = name
-        self.project_ref = DB.get_project_by_name(name)
-        self.ids.project_label.text = name
-        self.refresh_table()
-
     def on_pre_enter(self):
         if not DB.cur_proj:
             return
@@ -410,32 +366,23 @@ class AnalyzeDetail(Screen):
 class Vocabulary(Screen):
     def on_pre_enter(self, *args):
         self._build_flat_table()
-        # сбросить чекбокс шапки при входе
         if "app_cb" in self.ids:
             self.ids.app_cb.active = False
 
     # ---------- helpers ----------
-    def _is_analyzed(self, project_label: str, file_label: str) -> bool:
-        fname = file_label  # сюда уже придёт чистое имя без суффикса
-        for p in DB.projects:
-            if p.get("name") == project_label:
-                for f in p.get("files", []):
-                    if f.get("name") == fname:
-                        return bool(f.get("analyzed", False))
-        return False
-
     def _build_flat_table(self):
+        """Плоский список только из analyzed-файлов.
+        node_id делаем в формате file:<pi>:<fi>, чтобы работал экспорт."""
         rows = []
-        for p in DB.projects:
+        for pi, p in enumerate(DB.projects):
             proj = p.get("name", "")
-            for f in p.get("files", []):
+            for fi, f in enumerate(p.get("files", [])):
                 if not f.get("analyzed", False):
                     continue
                 rows.append({
-                    "id": f"file:{proj}:{f['name']}",
+                    "id": f"file:{pi}:{fi}",          # <-- ВАЖНО: индексы
                     "project": proj,
                     "file": f["name"],
-                    # ← БЕРЁМ lex_items (так у тебя хранится количество лексем)
                     "count": int(f.get("lex_items", 0)),
                     "created": f.get("created", p.get("created", "")) or ""
                 })
@@ -453,14 +400,13 @@ class Vocabulary(Screen):
             ))
         self._flat_cache = rows
 
-    # ---------- header checkbox ----------
+    # header checkbox
     def header_toggle(self, value: bool):
-        """Клик по чекбоксу в шапке — отметить/снять все строки."""
         for w in self.ids.vocab_rows.children:
             if isinstance(w, VocabFlatRow):
                 w.ids.cb.active = value
 
-    # ---------- export helpers ----------
+    # собрать выделенные id
     def _gather_checked_ids(self) -> list[str]:
         ids = []
         for w in self.ids.vocab_rows.children:
@@ -468,6 +414,7 @@ class Vocabulary(Screen):
                 ids.append(w.node_id)
         return ids
 
+    # ---- Export buttons ----
     def on_export_json(self):
         ids = self._gather_checked_ids()
         if not ids:
@@ -481,6 +428,33 @@ class Vocabulary(Screen):
             return
         ext, text = self._make_payload(ids, "csv")
         self._save_dialog(text, ext)
+
+    # ---- Реализация экспорта ----
+    def _make_payload(self, ids: list[str], fmt: str) -> tuple[str, str]:
+        """Собираем элементы из БД и упаковываем в JSON/CSV."""
+        entries = DB.collect_entries(ids)
+        if fmt == "json":
+            return "json", json.dumps({"entries": entries}, ensure_ascii=False, indent=2)
+        # CSV — по одной строке на элемент
+        csv_text = "entry\n" + "\n".join(entries)
+        return "csv", csv_text
+
+    def _save_dialog(self, text: str, ext: str):
+        """Просто показываем получившийся текст пользователю (прототип)."""
+        mv = ModalView(size_hint=(0.9, 0.9), auto_dismiss=True)
+        box = BoxLayout(orientation="vertical", spacing=8, padding=8)
+        ti = TextInput(text=text, readonly=True)
+        btn = Button(text="Close", size_hint_y=None, height=40)
+        btn.bind(on_release=lambda *_: mv.dismiss())
+        box.add_widget(ti)
+        box.add_widget(btn)
+        mv.add_widget(box)
+        mv.open()
+
+    # ---- Quiz ----
+    def open_quiz(self):
+        qm = QuizModal(size_hint=(0.6, 0.6), auto_dismiss=True)
+        qm.open()
 
 
 # --- ADD: flat row widget class ---
